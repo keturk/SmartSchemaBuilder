@@ -30,7 +30,7 @@ class DatabaseColumn:
     Class that represents a database column.
     """
 
-    def __init__(self, column_name, column_type, is_nullable, is_unique):
+    def __init__(self, column_name, column_type, column_size, is_nullable, is_unique):
         """
         Initialize a DatabaseColumn object.
 
@@ -42,6 +42,7 @@ class DatabaseColumn:
         """
         self.column_name = column_name.lower()
         self.column_type = column_type
+        self.column_size = column_size
         self.is_nullable = is_nullable
         self.is_unique = is_unique
 

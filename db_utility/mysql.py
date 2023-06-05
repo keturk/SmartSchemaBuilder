@@ -25,7 +25,10 @@ SOFTWARE.
 """
 import logging
 import re
+
+import common.library as lib
 from db_utility.database import DatabaseUtilityBase
+from db_utility.database_column import DatabaseColumn
 
 
 class MySQLUtility(DatabaseUtilityBase):
@@ -61,7 +64,7 @@ class MySQLUtility(DatabaseUtilityBase):
             'timetz': 'TIME',
             'time[tz]': 'TIME',
             'bytes': 'LONGBLOB',
-            'str': 'TEXT',
+            'str': 'VARCHAR(255)',
             'none': 'TEXT',
             'decimal': 'DECIMAL',
             'uuid': 'CHAR(36)',
@@ -71,6 +74,7 @@ class MySQLUtility(DatabaseUtilityBase):
             'set': 'JSON',
             'ipv4address': 'VARCHAR(15)',
             'ipv6address': 'VARCHAR(45)',
+            'string': 'VARCHAR(255)',
         }
 
         # Initialize the logger for logging purposes
@@ -119,24 +123,24 @@ class MySQLUtility(DatabaseUtilityBase):
         logging.debug(f"Formatted identifier is '{formatted_identifier}'.")
         return formatted_identifier
 
-    def generate_unique_index(self, formatted_table_name, index_columns):
+    def generate_unique_index(self, formatted_table_name, index_column: DatabaseColumn):
         """
         Generate SQL statement for creating a unique index on specified columns of a table.
 
         Args:
             formatted_table_name (str): Table name.
-            index_columns (list): List of columns to create the unique index on.
+            index_column (list): List of columns to create the unique index on.
 
         Returns:
             str: SQL statement for creating a unique index.
         """
-        formatted_index_column = self.format_identifier(index_columns.column_name)
+        formatted_index_column = self.format_identifier(index_column.column_name)
         logging.debug(
             f"Generating unique index for table '{self.schema_prefix}{formatted_table_name}' and "
             f"columns {formatted_index_column}.")
-        return f"CREATE UNIQUE INDEX idx_{formatted_table_name}_{formatted_index_column} " \
-               f"ON {self.schema_prefix}{formatted_table_name} ({formatted_index_column}) " \
-               f"IF NOT EXISTS;"
+
+        index_name = lib.truncate(f"idx_{formatted_table_name}_{formatted_index_column}", 64)
+        return f"\tUNIQUE INDEX {index_name} ({formatted_index_column}),\n"
 
     def generate_create_schema(self):
         """
@@ -171,7 +175,7 @@ class MySQLUtility(DatabaseUtilityBase):
             str: Ending part of the SQL statement for creating a table.
         """
         logging.debug("Creating table end statement.")
-        return "\n);\n"
+        return "\n);\n\n"
 
     def create_primary_keys(self, formatted_table_name, formatted_primary_keys):
         """
@@ -184,7 +188,8 @@ class MySQLUtility(DatabaseUtilityBase):
         Returns:
             str: SQL statement for defining primary keys.
         """
-        logging.debug(f"Creating primary keys for table '{self.schema_prefix}{formatted_table_name}' and keys {formatted_primary_keys}.")
+        logging.debug(f"Creating primary keys for table '{self.schema_prefix}{formatted_table_name}' "
+                      f"and keys {formatted_primary_keys}.")
         if type(formatted_primary_keys) == list:
             return f"\tPRIMARY KEY ({', '.join(formatted_primary_keys)}),\n"
         else:
@@ -196,7 +201,6 @@ class MySQLUtility(DatabaseUtilityBase):
 
         Args:
             column (Column): Column object representing the column information.
-            column_type (str): Data type of the column.
 
         Returns:
             str: Generated table column definition.
@@ -225,14 +229,11 @@ class MySQLUtility(DatabaseUtilityBase):
             referenced_column = self.format_identifier(foreign_key.referenced_column)
             referencing_column = self.format_identifier(foreign_key.column_name)
 
-            constraint_name = f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}"
+            constraint_name = lib.truncate( 
+                f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}", 64)
             statement = \
-                f"ALTER TABLE {self.schema_prefix}{formatted_table_name}\n" \
-                f"  DROP FOREIGN KEY IF EXISTS {constraint_name};\n" \
-                f"ALTER TABLE {self.schema_prefix}{formatted_table_name}\n " \
-                f"  ADD CONSTRAINT {constraint_name} " \
-                f"  FOREIGN KEY ({referencing_column}) " \
-                f"  REFERENCES {self.schema_prefix}{referenced_table} ({referenced_column}) ON DELETE CASCADE;\n"
+                f"\tCONSTRAINT {constraint_name} FOREIGN KEY ({referencing_column})\n" \
+                f"\t\tREFERENCES {self.schema_prefix}{referenced_table} ({referenced_column}) ON DELETE CASCADE,\n"
             foreign_key_statements.append(statement)
 
         return '\n'.join(foreign_key_statements)

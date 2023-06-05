@@ -31,6 +31,7 @@ import logging
 from dotenv import load_dotenv
 from pattern.text import singularize
 from pattern.text import pluralize
+import hashlib
 
 # Load environment variables from .env file
 load_dotenv()
@@ -195,6 +196,39 @@ def singular(word):
 def lemma_compare(word1, word2):
     # Check if the singular or plural forms of words match
     return singular(word1) == singular(word2) or plural(word1) == plural(word2)
+
+
+def truncate(constraint_name, max_length=128):
+    """
+    Truncates a long constraint name and appends a 5-digit hash of the non-truncated name for uniqueness.
+
+    Args:
+        constraint_name (str): The original constraint name.
+        max_length (int): The maximum length allowed for the constraint name (default: 128).
+
+    Returns:
+        str: The truncated constraint name with a 5-digit hash of the non-truncated name.
+
+    """
+
+    # Calculate the maximum length for the truncated constraint name
+    max_constraint_length = max_length - 5  # Subtract 5 for the 5-digit hash
+
+    # Check if the constraint name exceeds the maximum length
+    if len(constraint_name) > max_constraint_length:
+        # Truncate the constraint name to fit within the maximum length
+        truncated_name = constraint_name[:max_constraint_length]
+    else:
+        # Use the original constraint name if it's already within the maximum length
+        truncated_name = constraint_name
+
+    # Generate a hash of the non-truncated constraint name
+    name_hash = hashlib.md5(constraint_name.encode()).hexdigest()[:5]
+
+    # Append the hash to the truncated constraint name
+    final_name = truncated_name + name_hash
+
+    return final_name
 
 
 class CaseInsensitiveChoice(click.ParamType):

@@ -26,6 +26,7 @@ SOFTWARE.
 import logging
 import re
 
+import common.library as lib
 from db_utility.database import DatabaseUtilityBase
 
 
@@ -72,6 +73,7 @@ class PostgreSQLUtility(DatabaseUtilityBase):
             'set': 'jsonb',
             'ipv4address': 'inet',
             'ipv6address': 'inet',
+            'string': 'text',
         }
 
         # Initialize the logger for logging purposes
@@ -127,22 +129,22 @@ class PostgreSQLUtility(DatabaseUtilityBase):
         logging.debug(f"Formatted identifier is '{formatted_identifier}'.")
         return formatted_identifier
 
-    def generate_unique_index(self, formatted_table_name, index_columns):
+    def generate_unique_index(self, formatted_table_name, index_column):
         """
         Generate SQL statement for creating a unique index on specified columns of a table.
 
         Args:
             formatted_table_name (str): Table name.
-            index_columns (list): List of columns to create the unique index on.
+            index_column (list): List of columns to create the unique index on.
 
         Returns:
             str: SQL statement for creating a unique index.
         """
-        formatted_index_column = self.format_identifier(index_columns.column_name)
+        formatted_index_column = self.format_identifier(index_column.column_name)
         logging.debug(f"Generating unique index for table '{self.schema_prefix}{formatted_table_name}' and columns " 
                       f"{formatted_index_column}.")
-        return f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{formatted_table_name}_{formatted_index_column} " \
-               f"ON {self.schema_prefix}{formatted_table_name} ({formatted_index_column});\n"
+        constraint_name = lib.truncate(f"idx_{formatted_table_name}_{formatted_index_column}", 63)
+        return f"\tCONSTRAINT {constraint_name} UNIQUE({formatted_index_column}),\n"
 
     def generate_create_schema(self):
         """
@@ -230,14 +232,11 @@ class PostgreSQLUtility(DatabaseUtilityBase):
             referenced_column = self.format_identifier(foreign_key.referenced_column)
             referencing_column = self.format_identifier(foreign_key.column_name)
 
-            constraint_name = f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}"
+            constraint_name = lib.truncate(
+                f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}", 63)
             statement = \
-                f"ALTER TABLE {self.schema_prefix}{formatted_table_name}\n" \
-                f"  DROP CONSTRAINT IF EXISTS {constraint_name};\n" \
-                f"ALTER TABLE {self.schema_prefix}{formatted_table_name}\n" \
-                f"  ADD CONSTRAINT {constraint_name}\n" \
-                f"  FOREIGN KEY ({referencing_column})\n" \
-                f"  REFERENCES {self.schema_prefix}{referenced_table} ({referenced_column});\n"
+                f"\tCONSTRAINT {constraint_name} FOREIGN KEY ({referencing_column})\n" \
+                f"\t\tREFERENCES {self.schema_prefix}{referenced_table} ({referenced_column}) ON DELETE CASCADE,\n"
             foreign_key_statements.append(statement)
 
         return '\n'.join(foreign_key_statements)

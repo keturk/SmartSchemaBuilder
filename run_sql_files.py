@@ -35,11 +35,12 @@ import db_utility.database as database_utility
 common_library.configure_logging('run_sql_files.log', logging.INFO)
 
 
-def execute_ddl_file(conn, cursor, ddl_file, folder):
+def execute_ddl_file(db_type, conn, cursor, ddl_file, folder):
     """
     Execute the DDL statements from a file.
 
     Args:
+        db_type (str): Database type.
         conn: Database connection object.
         cursor: Database cursor object.
         ddl_file (str): Name of the DDL file to execute.
@@ -54,7 +55,7 @@ def execute_ddl_file(conn, cursor, ddl_file, folder):
         ddl_statements = f.read()
 
     try:
-        cursor.execute(ddl_statements)
+        database_utility.execute_sql_statements(db_type, conn, cursor, ddl_statements)
         conn.commit()
         logging.info(f"Executed DDL file: {ddl_file}")
     except Exception as e:
@@ -175,7 +176,7 @@ def run_sql_files(db_type, host, port, database, username, folder):
         logging.info('Executing DDL files...')
         for ddl_file in ddl_files:
             # Execute the DDL statements from the file
-            ddl_statements = execute_ddl_file(conn, cursor, ddl_file, folder)
+            ddl_statements = execute_ddl_file(db_type, conn, cursor, ddl_file, folder)
 
             # Extract table names from the DDL statements
             table_names = extract_table_names(ddl_statements)

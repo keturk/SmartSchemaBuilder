@@ -26,6 +26,7 @@ SOFTWARE.
 import logging
 import re
 
+import common.library as lib
 from db_utility.database import DatabaseUtilityBase
 
 
@@ -74,6 +75,7 @@ class SQLServerUtility(DatabaseUtilityBase):
             'set': 'NVARCHAR(MAX)',
             'ipv4address': 'VARCHAR(15)',
             'ipv6address': 'VARCHAR(45)',
+            'string': 'NVARCHAR(255)',
         }
 
         logging.info("SQL Server utility created successfully.")
@@ -89,7 +91,7 @@ class SQLServerUtility(DatabaseUtilityBase):
             str: Corresponding SQL Server data type.
         """
         logging.debug(f"Mapping pandas data type '{dataframe_type}' to SQL Server data type.")
-        return self.type_mapping.get(dataframe_type, 'TEXT')
+        return self.type_mapping.get(dataframe_type.lower(), 'TEXT')
 
     def get_database_type(self):
         """
@@ -123,27 +125,22 @@ class SQLServerUtility(DatabaseUtilityBase):
         logging.debug(f"Formatted identifier is '{formatted_identifier}'.")
         return formatted_identifier
 
-    def generate_unique_index(self, formatted_table_name, index_columns):
+    def generate_unique_index(self, formatted_table_name, index_column):
         """
         Generate SQL statement for creating a unique index on specified columns of a table.
 
         Args:
             formatted_table_name (str): Table name.
-            index_columns (list): List of columns to create the unique index on.
+            index_column (list): List of columns to create the unique index on.
 
         Returns:
             str: SQL statement for creating a unique index.
         """
-        formatted_index_column = self.format_identifier(index_columns.column_name)
+        formatted_index_column = self.format_identifier(index_column.column_name)
         logging.debug(f"Generating unique index for table '{self.schema_prefix}{formatted_table_name}' and columns "
                       f"{formatted_index_column}.")
-        return f"IF NOT EXISTS (SELECT 1 FROM sys.indexes " \
-               f"WHERE object_id = OBJECT_ID('{self.schema_prefix}{formatted_table_name}') " \
-               f"AND name = 'idx_{formatted_table_name}_{formatted_index_column}')\n" \
-               f"BEGIN\n" \
-               f"    CREATE UNIQUE INDEX idx_{formatted_table_name}_{formatted_index_column} " \
-               f"    ON {self.schema_prefix}{formatted_table_name} ({formatted_index_column});\n" \
-               f"END;\n"
+        constraint_name = lib.truncate(f"idx_{formatted_table_name}_{formatted_index_column}", 128)
+        return f"\tCONSTRAINT {constraint_name} UNIQUE ({formatted_index_column}),\n"
 
     def generate_create_schema(self):
         """
@@ -171,9 +168,7 @@ class SQLServerUtility(DatabaseUtilityBase):
             str: Beginning part of the SQL statement for creating a table.
         """
         logging.debug(f"Creating table begin statement for table '{self.schema_prefix}{formatted_table_name}'.")
-        return f'IF NOT EXISTS(SELECT 1 FROM sys.tables WHERE name = \'{formatted_table_name}\' AND type = \'U\')\n' \
-               f'BEGIN\n' \
-               f'\tCREATE TABLE {self.schema_prefix}{formatted_table_name} (\n'
+        return f'CREATE TABLE {self.schema_prefix}{formatted_table_name} (\n'
 
     def create_table_end(self):
         """
@@ -183,8 +178,7 @@ class SQLServerUtility(DatabaseUtilityBase):
             str: Ending part of the SQL statement for creating a table.
         """
         logging.debug("Creating table end statement.")
-        return f'\n\t);\n' \
-               f'END;\n\n'
+        return f'\n);\n'
 
     def create_primary_keys(self, formatted_table_name, formatted_primary_keys):
         """
@@ -200,10 +194,10 @@ class SQLServerUtility(DatabaseUtilityBase):
         logging.debug(f"Creating primary keys for table '{self.schema_prefix}{formatted_table_name}' "
                       f"and keys {formatted_primary_keys}.")
         if type(formatted_primary_keys) == list:
-            return f"\t\tCONSTRAINT PK_{formatted_table_name} " \
+            return f"\tCONSTRAINT PK_{formatted_table_name} " \
                    f"PRIMARY KEY ({', '.join(formatted_primary_keys)}),\n"
         else:
-            return f"\t\tCONSTRAINT PK_{formatted_table_name} " \
+            return f"\tCONSTRAINT PK_{formatted_table_name} " \
                    f"PRIMARY KEY ({formatted_primary_keys}),\n"
 
     def generate_table_column(self, column):
@@ -220,7 +214,7 @@ class SQLServerUtility(DatabaseUtilityBase):
         formatted_column_name = self.format_identifier(column.column_name)
         nullability = "NOT NULL" if not column.is_nullable else ""
 
-        return f"\t\t{formatted_column_name} {column.column_type} {nullability},\n"
+        return f"\t{formatted_column_name} {column.column_type} {nullability},\n"
 
     def create_foreign_keys(self, formatted_table_name, foreign_keys):
         """
@@ -240,18 +234,11 @@ class SQLServerUtility(DatabaseUtilityBase):
             referenced_column = self.format_identifier(foreign_key.referenced_column)
             referencing_column = self.format_identifier(foreign_key.column_name)
 
-            constraint_name = f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}"
+            constraint_name = lib.truncate(
+                f"fk_{formatted_table_name}_{referencing_column}_{referenced_table}_{referenced_column}", 128)
             statement = \
-                f"IF NOT EXISTS (\n" \
-                f"  SELECT * FROM sys.foreign_keys\n" \
-                f"      WHERE object_id = OBJECT_ID('{self.schema_prefix}{formatted_table_name}')\n" \
-                f"      AND name = '{constraint_name}')\n" \
-                f"BEGIN\n" \
-                f"  ALTER TABLE {self.schema_prefix}{formatted_table_name}\n" \
-                f"      ADD CONSTRAINT {constraint_name}\n" \
-                f"      FOREIGN KEY ({referencing_column})\n" \
-                f"      REFERENCES {self.schema_prefix}{referenced_table} ({referenced_column}) ON DELETE CASCADE;\n" \
-                f"END;\n"
+                f"\tCONSTRAINT {constraint_name} FOREIGN KEY ({referencing_column})\n" \
+                f"\t\tREFERENCES {self.schema_prefix}{referenced_table} ({referenced_column}),\n"
             foreign_key_statements.append(statement)
 
         return '\n'.join(foreign_key_statements)

@@ -44,6 +44,43 @@ DEFAULT_PORTS = {
 }
 
 
+def execute_sql_statements(db_type, conn, cursor, sql_statements):
+    """
+    Execute SQL statements based on the database platform.
+
+    Args:
+        db_type (str): Type of the database.
+        conn: Database connection object.
+        cursor: Database cursor object.
+        sql_statements (str): SQL statements to execute.
+
+    Returns:
+        str: The SQL statements executed.
+
+    """
+    # Execute SQL statements based on the database platform
+    if db_type == 'sqlserver':
+        # SQL Server
+        cursor.execute(sql_statements)
+    elif db_type == 'mysql':
+        # MySQL
+        statements = sql_statements.split(';')
+        for statement in statements:
+            if statement.strip():
+                cursor.execute(statement)
+    elif db_type == 'postgresql':
+        # PostgreSQL
+        cursor.execute(sql_statements)
+    else:
+        logging.error("Unsupported database platform")
+        conn.rollback()
+        return ""
+
+    # Commit the transaction
+    conn.commit()
+    return sql_statements
+
+
 def connect_to_database(db_type, host, port, database, username, password):
     """
     Connects to the specified database.
@@ -167,13 +204,13 @@ class DatabaseUtilityBase:
         """
         raise NotImplementedError("Subclasses must implement format_identifier() method")
 
-    def generate_unique_index(self, formatted_table_name, index_columns):
+    def generate_unique_index(self, formatted_table_name, index_column):
         """
         Method to generate unique index for a given table.
 
         Args:
             formatted_table_name (str): Name of the table for which to generate the unique index.
-            index_columns (str): Columns on which the index will be made.
+            index_column (str): Columns on which the index will be made.
 
         Returns:
             str: The SQL statement for creating the unique index.
@@ -352,9 +389,6 @@ class DatabaseUtilityBase:
                         [self.format_identifier(primary_key) for primary_key in database_table.primary_keys]
                     ddl += self.create_primary_keys(formatted_table_name, ','.join(formatted_primary_keys))
 
-                ddl = ddl.rstrip(",\n")
-                ddl += self.create_table_end()
-
                 if database_table.has_foreign_keys():
                     foreign_keys = database_table.foreign_keys
                     ddl += self.create_foreign_keys(formatted_table_name, foreign_keys)
@@ -363,6 +397,8 @@ class DatabaseUtilityBase:
                     for index_columns in database_table.unique_indexes:
                         ddl += self.generate_unique_index(formatted_table_name, index_columns)
 
+                ddl = ddl.rstrip(",\n")
+                ddl += self.create_table_end()
                 ddl += "\n\n"
 
             logging.info("DDL generation complete.")

@@ -110,11 +110,13 @@ class DatabaseTable:
         columns = []
         for column in dataframe.columns:
             column_type = db_generator.map_data_type(dataframe[column].dtype.name)
+            column_size = len(dataframe[column])
             is_unique = dataframe[column].is_unique
             is_nullable = dataframe[column].isnull().any()
 
             # Creating a DatabaseColumn object
-            db_column = DatabaseColumn(column_name=column, column_type=column_type, is_nullable=is_nullable,
+            db_column = DatabaseColumn(column_name=column, column_type=column_type, column_size=column_size,
+                                       is_nullable=is_nullable,
                                        is_unique=is_unique)
             columns.append(db_column)
 
