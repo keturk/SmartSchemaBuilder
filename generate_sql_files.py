@@ -261,6 +261,7 @@ def find_foreign_keys(database_tables):
 
 @click.command()
 @click.argument('folder')
+@click.option('--folder', prompt='Enter the directory path containing the SQL files')
 @click.option('--db-type', type=common_library.CaseInsensitiveChoice(database_utility.SUPPORTED_DATABASES), prompt=True)
 @click.option('--schema', default=None, prompt='Enter the database schema name (optional)')
 def generate_sql_files(folder: str, db_type: str, schema: str):
@@ -280,6 +281,7 @@ def generate_sql_files(folder: str, db_type: str, schema: str):
     logging.info(f"Folder: {folder}")
     logging.info(f"Target Database: {db_type}")
 
+    folder = os.path.abspath(folder)
     # Check if the specified folder exists
     if not os.path.exists(folder):
         logging.error("Error: The specified folder does not exist.")

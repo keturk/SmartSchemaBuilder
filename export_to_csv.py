@@ -103,6 +103,7 @@ def export_tables_to_csv(db_type, host, port, database, username, schema, folder
         cursor.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema='{schema}'")
         tables = cursor.fetchall()
 
+        folder = os.path.abspath(folder)
         # Create the folder if it doesn't exist
         os.makedirs(folder, exist_ok=True)
 

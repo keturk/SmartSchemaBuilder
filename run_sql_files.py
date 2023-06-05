@@ -158,6 +158,12 @@ def run_sql_files(db_type, host, port, database, username, folder):
     if not password:
         password = getpass.getpass('Enter the password: ')
 
+    folder = os.path.abspath(folder)
+    # Check if the specified folder exists
+    if not os.path.exists(folder):
+        logging.error("Error: The specified folder does not exist.")
+        return
+
     # Get the list of files in the directory
     files = os.listdir(folder)
 
