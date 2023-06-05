@@ -112,6 +112,12 @@ def load_csv_files(folder, csv_filenames, db_generator):
     return database_tables
 
 
+# Primary Keys:
+#
+# The function identifies primary keys by finding the first n columns in each table that are not duplicated together.
+# It starts with n = 1 and incrementally checks for duplicates in the selected columns.
+# If duplicates are found, the script moves to the next set of columns until a set is found without duplicates.
+# The columns without duplicates are considered as primary keys for the respective table.
 def find_primary_keys(database_tables):
     """
     Function to find primary keys in database tables.
@@ -142,6 +148,10 @@ def find_primary_keys(database_tables):
         database_table.add_primary_key(primary_keys)
 
 
+# Find unique indexes by checking if a column has unique values within a table.
+# It iterates through each column in a table and verifies if the number of unique values in the column is equal to
+# the number of rows in the table.
+# If a column satisfies this condition and is not a primary key, it is considered a unique index for the table.
 def find_unique_indexes(database_tables):
     """
     Function to find unique indexes in database tables.
@@ -172,6 +182,17 @@ def find_unique_indexes(database_tables):
             database_table.add_unique_index(unique_indexes)
 
 
+# Foreign Keys:
+#
+# The function identifies foreign keys in two ways:
+#
+# 1. For the first case, it iterates through all the tables and compares the column name with the primary key
+#    column name of each table. If a match is found, a foreign key relationship is established between the tables.
+#    The referenced table must have a single column primary key.
+#
+# 2. For the second case, it checks if a column name ends with '_id' and attempts to find a table with a
+#    corresponding name (without '_id'). If the referenced table exists, a foreign key relationship is established
+#    between the tables based on the 'id' column. The referenced table must have a single column primary key.
 def find_foreign_keys(database_tables):
     """
     Function to find foreign keys in database tables.
