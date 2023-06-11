@@ -29,30 +29,6 @@ from db_utility.database_column import DatabaseColumn
 from db_utility.database_foreign_key import DatabaseForeignKey
 
 
-def get_table_by_name(tables, table_name):
-    """
-    Get a table from a list of tables by name.
-
-    Args:
-        tables (dict): Dictionary of table objects with table names as keys.
-        table_name (str): Name of the table to get.
-
-    Returns:
-        DatabaseTable: The DatabaseTable object with the given name, or None if not found.
-    """
-    # We will first look for the table name in the table names.
-    for table in tables.values():
-        if common_library.lemma_compare(table.table_name, table_name):
-            return table
-
-    # If not found, look in the original table names.
-    for table in tables.values():
-        if common_library.lemma_compare(table.original_table_name, table_name):
-            return table
-
-    return None
-
-
 class DatabaseTable:
     """
     Class that represents a database table.
@@ -94,12 +70,12 @@ class DatabaseTable:
                f'Columns: {[str(column) for column in self.columns]}'
 
     @classmethod
-    def from_dataframe(cls, db_generator, dataframe, csv_filename, table_name):
+    def from_dataframe(cls, db, dataframe, csv_filename, table_name):
         """
         Create a DatabaseTable object from a dataframe.
 
         Args:
-            db_generator (DatabaseUtilityBase): The DatabaseUtilityBase for database generation.
+            db (Database): The Database instance for schema generation.
             dataframe (DataFrame): The dataframe which contains the CSV file format and content.
             csv_filename (str): The CSV file from which the dataframe was created.
             table_name (str): The name of the database table.
@@ -109,7 +85,7 @@ class DatabaseTable:
         """
         columns = []
         for column in dataframe.columns:
-            column_type = db_generator.map_data_type(dataframe[column].dtype.name)
+            column_type = db.map_data_type(dataframe[column].dtype.name)
             column_size = len(dataframe[column])
             is_unique = dataframe[column].is_unique
             is_nullable = dataframe[column].isnull().any()
@@ -122,6 +98,92 @@ class DatabaseTable:
 
         return cls(dataframe, csv_filename, table_name, columns)
 
+    @classmethod
+    def from_database(cls, db, schema_name, table_name):
+        """
+        Create a DatabaseTable object from a database connection.
+
+        Args:
+            db (Database): The Database for database generation.
+            schema_name (str): The name of the database schema.
+            table_name (str): The name of the database table.
+
+        Returns:
+            DatabaseTable: The created DatabaseTable object.
+        """
+
+        # Get column information from the database
+        column_query = db.get_column_query()
+        # Execute the column query
+        columns_data = db.execute_query(column_query, (table_name,))
+
+        # Get primary key information from the database (specific to PostgreSQL)
+        primary_key_query, query_parameters = db.get_primary_keys_query(schema_name, table_name)
+        # Execute the primary key query
+        primary_keys_data = db.execute_query(primary_key_query, query_parameters)
+
+        # Get foreign key information from the database (specific to PostgreSQL)
+        foreign_key_query = db.get_foreign_key_query()
+        # Execute the foreign key query
+        foreign_keys_data = db.execute_query(foreign_key_query, (schema_name, table_name,))
+
+        # Create the DatabaseColumn objects
+        columns = []
+        for column_data in columns_data:
+            column_name, column_type, column_size, is_nullable = column_data
+            # Additional processing or mapping of types may be required based on the database system
+            db_column = DatabaseColumn(column_name, column_type, column_size, is_nullable, False)
+            columns.append(db_column)
+
+        # Create the table name with '.csv' extension
+        csv_filename = f"{table_name.lower()}.csv"
+
+        # Create the DatabaseTable object
+        db_table = DatabaseTable(dataframe=None, csv_filename=csv_filename, table_name=table_name, columns=columns)
+
+        # Set the primary keys
+        db_table.primary_keys = [pk[0] for pk in primary_keys_data]
+
+        # Create the DatabaseForeignKey objects
+        foreign_keys = []
+        for fk_data in foreign_keys_data:
+            column_name, referenced_table, referenced_column, constraint_name, \
+                on_update_action, on_delete_action = fk_data
+
+            foreign_key = DatabaseForeignKey(column_name, referenced_table, referenced_column)
+            foreign_key.on_update_action = on_update_action
+            foreign_key.on_delete_action = on_delete_action
+            foreign_keys.append(foreign_key)
+
+        # Set the foreign keys
+        db_table.foreign_keys = foreign_keys
+
+        return db_table
+
+    @staticmethod
+    def get_table_by_name(tables, table_name):
+        """
+        Get a table from a list of tables by name.
+
+        Args:
+            tables (dict): Dictionary of table objects with table names as keys.
+            table_name (str): Name of the table to get.
+
+        Returns:
+            DatabaseTable: The DatabaseTable object with the given name, or None if not found.
+        """
+        # We will first look for the table name in the table names.
+        for table in tables.values():
+            if common_library.lemma_compare(table.table_name, table_name):
+                return table
+
+        # If not found, look in the original table names.
+        for table in tables.values():
+            if common_library.lemma_compare(table.original_table_name, table_name):
+                return table
+
+        return None
+
     def get_primary_key(self):
         """
         Get the primary key of the database table.
@@ -133,7 +195,7 @@ class DatabaseTable:
             return self.primary_keys[0]
         return None
 
-    def get_primary_keys(self):
+    def get_primary_keys_query(self):
         """
         Get the primary keys of the database table.
 
@@ -242,17 +304,34 @@ class DatabaseTable:
 
     def get_column_by_name(self, column_name):
         """
-        Get a column in the database table by its name.
+        Get the DatabaseColumn object based on the column name.
 
         Args:
-            column_name (str): The name of the column.
+            column_name (str): Name of the column.
 
         Returns:
-            DatabaseColumn: The column with the given name.
+            tuple: (column_object, column_index) if found, None otherwise.
         """
-        for column in self.columns:
+        for i, column in enumerate(self.columns):
             if column.column_name == column_name:
-                return column
+                return column, i
+        return None, None
+
+    @staticmethod
+    def parse_fq_column_name(fq_column_name):
+        """
+        Parse the fully qualified column name and return the column name.
+
+        Args:
+            fq_column_name (str): Column reference string in the format "schema.table.column",
+                                  "table.column", or "column".
+
+        Returns:
+            str: The column name.
+        """
+        parts = fq_column_name.split(".")
+        column_name = parts[-1]
+        return column_name
 
     def update_column_name(self, old_name, new_name):
         """

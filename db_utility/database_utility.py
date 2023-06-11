@@ -24,144 +24,320 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import os
-import psycopg2
 import logging
-import mysql.connector
-import pyodbc
 import pandas
 
 from queue import Queue
-from db_utility.database_table import get_table_by_name
-
-# Supported databases
-SUPPORTED_DATABASES = ['postgresql', 'mysql', 'sqlserver']
-
-# Default ports for each database type
-DEFAULT_PORTS = {
-    'postgres': 5432,
-    'mysql': 3306,
-    'sqlserver': 1433
-}
+from db_utility.database_table import DatabaseTable
 
 
-def execute_sql_statements(db_type, conn, cursor, sql_statements):
+class DatabaseUtility:
     """
-    Execute SQL statements based on the database platform.
-
-    Args:
-        db_type (str): Type of the database.
-        conn: Database connection object.
-        cursor: Database cursor object.
-        sql_statements (str): SQL statements to execute.
-
-    Returns:
-        str: The SQL statements executed.
-
-    """
-    # Execute SQL statements based on the database platform
-    if db_type == 'sqlserver':
-        # SQL Server
-        cursor.execute(sql_statements)
-    elif db_type == 'mysql':
-        # MySQL
-        statements = sql_statements.split(';')
-        for statement in statements:
-            if statement.strip():
-                cursor.execute(statement)
-    elif db_type == 'postgresql':
-        # PostgreSQL
-        cursor.execute(sql_statements)
-    else:
-        logging.error("Unsupported database platform")
-        conn.rollback()
-        return ""
-
-    # Commit the transaction
-    conn.commit()
-    return sql_statements
-
-
-def connect_to_database(db_type, host, port, database, username, password):
-    """
-    Connects to the specified database.
-
-    Args:
-        port (int): Port number of the database.
-        db_type (str): Type of the database.
-        host (str): Host of the database.
-        database (str): Database name.
-        username (str): Username for authentication.
-        password (str): Password for authentication.
-
-    Returns:
-        Connection object: The connection to the database.
-
-    Raises:
-        ValueError: If an invalid database type is provided.
-        Exception: If an error occurs while connecting to the database.
-    """
-    # Set the default port if not provided
-    if not port:
-        port = DEFAULT_PORTS.get(db_type)
-
-    if db_type == 'postgresql':
-        logging.info('Connecting to PostgreSQL database...')
-        conn = psycopg2.connect(host=host, port=port, database=database, user=username, password=password)
-    elif db_type == 'mysql':
-        logging.info('Connecting to MySQL database...')
-        conn = mysql.connector.connect(host=host, port=port, database=database, user=username, password=password)
-    elif db_type == 'sqlserver':
-        logging.info('Connecting to SQL Server database...')
-        conn = pyodbc.connect(
-            f'DRIVER={{SQL Server}};SERVER={host},{port};DATABASE={database};UID={username};PWD={password}')
-    else:
-        raise ValueError(f"Invalid database type: {db_type}")
-    return conn
-
-
-def create(db_type: str, schema_name: str):
-    """
-    Factory method to create an instance of database utility based on the provided database type.
-
-    Args:
-        db_type (str): Type of database. Options are 'postgresql', 'mysql', 'sqlserver'.
-        schema_name (str): Name of the schema.
-
-    Returns:
-        Instance of respective database utility or None if invalid db_type is provided.
-
-    Raises:
-        Exception: If an error occurs while creating the database utility.
-    """
-    db_type = db_type.lower()
-    if db_type == 'postgresql':
-        # Importing here to avoid circular import
-        from db_utility.postgresql import PostgreSQLUtility
-        return PostgreSQLUtility(schema_name)
-    elif db_type == 'mysql':
-        # Importing here to avoid circular import
-        from db_utility.mysql import MySQLUtility
-        return MySQLUtility(schema_name)
-    elif db_type == 'sqlserver':
-        # Importing here to avoid circular import
-        from db_utility.sqlserver import SQLServerUtility
-        return SQLServerUtility(schema_name)
-    else:
-        logging.error("Error: Invalid target database selected.")
-        return None
-
-
-class DatabaseUtilityBase:
-    """
-    Base class for Database Utility.
+    Base class for Database Utility
 
     This class is intended to be subclassed by utility classes specific to a database.
     Each subclass must implement the abstract methods defined here.
     """
+
+    # Supported databases
+    SUPPORTED_DATABASES = ['postgresql', 'mysql', 'sqlserver']
+
+    # Default ports for each database type
+    DEFAULT_PORTS = {
+        'postgresql': 5432,
+        'mysql': 3306,
+        'sqlserver': 1433
+    }
+
+    # Constructor and connection methods
     def __init__(self, schema_name):
         self.schema_name = self.format_identifier(schema_name)
         self.schema_prefix = f"{self.schema_name}." if self.schema_name is not None else ""
+        self.connection = None
+        self.cursor = None
+        self.host = None
+        self.port = None
+        self.user = None
+        self.password = None
+        self.database = None
 
+    @staticmethod
+    def create(db_type: str, schema_name: str = ''):
+        """
+        Factory method to create an instance of database utility based on the provided database type.
+
+        Args:
+            db_type (str): Type of database. Options are 'postgresql', 'mysql', 'sqlserver'.
+            schema_name (str): Name of the schema.
+
+        Returns:
+            Instance of respective database utility or None if invalid db_type is provided.
+
+        Raises:
+            Exception: If an error occurs while creating the database utility.
+        """
+        db_type = db_type.lower()
+        if db_type == 'postgresql':
+            # Importing here to avoid circular import
+            from db_utility.postgresql_utility import PostgreSQLUtility
+            return PostgreSQLUtility(schema_name)
+        elif db_type == 'mysql':
+            # Importing here to avoid circular import
+            from db_utility.mysql_utility import MySQLUtility
+            return MySQLUtility(schema_name)
+        elif db_type == 'sqlserver':
+            # Importing here to avoid circular import
+            from db_utility.sqlserver_utility import SQLServerUtility
+            return SQLServerUtility(schema_name)
+        else:
+            logging.error("Error: Invalid target database selected.")
+            return None
+
+    def connect(self, host, port, database, username, password):
+        """
+        Connects to the specified database.
+
+        Args:
+            host (str): Host of the database.
+            port (int): Port number of the database.
+            database (str): Database name.
+            username (str): Username for authentication.
+            password (str): Password for authentication.
+
+        Returns:
+            Connection object: The connection to the database.
+
+        Raises:
+            ValueError: If an invalid database type is provided.
+            Exception: If an error occurs while connecting to the database.
+        """
+        return NotImplementedError("Subclasses must implement connect() method")
+
+    def commit(self):
+        """
+        Commits the current transaction.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If the connection is not established or an error occurs during the commit.
+        """
+        try:
+            if self.connection is None:
+                raise Exception("Connection is not established. Call connect() method first.")
+
+            self.connection.commit()
+
+        except Exception as e:
+            logging.exception(f"An error occurred while committing the transaction: {e}")
+
+    def rollback(self):
+        """
+        Rolls back the current transaction.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If the connection is not established or an error occurs during the rollback.
+        """
+        try:
+            if self.connection is None:
+                raise Exception("Connection is not established. Call connect() method first.")
+
+            self.connection.rollback()
+
+        except Exception as e:
+            logging.exception(f"An error occurred while rolling back the transaction: {e}")
+
+    def close(self):
+        """
+        Closes the cursor and connection to the database.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If the connection or cursor is not established.
+        """
+        try:
+            if self.cursor is None:
+                raise Exception("Cursor is not established. Call connect() method first.")
+            if self.connection is None:
+                raise Exception("Connection is not established. Call connect() method first.")
+
+            self.dump_unread_results()
+
+            self.cursor.close()
+            self.connection.close()
+
+            # Set the cursor and connection variables to None after closing
+            self.cursor = None
+            self.connection = None
+
+        except Exception as e:
+            logging.exception(f"An error occurred while closing the connection: {e}")
+
+    def dump_unread_results(self):
+        """
+        Dumps and logs any unread result sets in the cursor.
+
+        Returns:
+            None
+        """
+        return NotImplementedError("Subclasses must implement dump_unread_results() method")
+
+    # Query execution methods
+    def execute_query(self, query, parameters=None, fetch_all=True):
+        """
+        Executes the provided SQL query using the cursor.
+
+        Args:
+            query (str): The SQL query to execute.
+            parameters (tuple): Optional parameter values for the query (default: None).
+            fetch_all (bool): Flag indicating whether to fetch all rows (default: True).
+
+        Returns:
+            list or tuple: The result of the query. If fetch_all is True, returns a list of tuples representing
+                           the rows. If fetch_all is False, returns a single tuple representing the first row.
+                           If no rows are fetched, returns an empty list.
+
+        Raises:
+            Exception: If the connection or cursor is not established, or an error occurs during query execution.
+        """
+        try:
+            if self.cursor is None:
+                raise Exception("Cursor is not established. Call connect() method first.")
+
+            if parameters is not None:
+                self.cursor.execute(query, parameters)
+            else:
+                self.cursor.execute(query)
+
+            if fetch_all:
+                return self.cursor.fetchall()
+            else:
+                return self.cursor.fetchone() or []
+
+        except Exception as e:
+            logging.exception(f"Failed to execute query:\n{query}\n\nError: {e}")
+            raise
+
+    def execute_sql_statements(self, sql_statements):
+        """
+        Execute SQL statements based on the database platform.
+
+        Args:
+            sql_statements (str): SQL statements to execute.
+
+        Returns:
+            str: The SQL statements executed.
+
+        """
+        return NotImplementedError("Subclasses must implement execute_sql_statements() method")
+
+    # Query generation methods
+    def get_select_query(self, table_name, columns=None, where=None, limit=None):
+        """
+        Get the SQL query to retrieve rows from a table in PostgreSQL.
+
+        Args:
+            table_name (str): The name of the table.
+            columns (list[str], optional): The columns to retrieve. Defaults to None, which retrieves all columns.
+            where (str, optional): The WHERE clause condition. Defaults to None.
+            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+
+        Returns:
+            str: The generated SQL query.
+        """
+        # Start building the SELECT query
+        query = "SELECT"
+
+        # Add the column names or * for all columns
+        if columns is None:
+            query += " *"
+        else:
+            query += " " + ", ".join(columns)
+
+        # Add the table name
+        query += " FROM " + table_name
+
+        # Add the WHERE clause if provided
+        if where is not None:
+            query += " WHERE " + where
+
+        # Add the LIMIT clause if provided
+        if limit is not None:
+            query += " LIMIT " + str(limit)
+
+        return query
+
+    def get_column_query(self):
+        """
+        Get the SQL query to retrieve column information from the database.
+
+        Returns:
+            str: The SQL query to retrieve column information.
+        """
+        return NotImplementedError("Subclasses must implement get_column_query() method")
+
+    def get_primary_keys_query(self, schema_name, table_name):
+        """
+        Get the SQL query to retrieve primary key information from the database.
+
+        Returns:
+            str: The SQL query to retrieve primary key information.
+        """
+        return NotImplementedError("Subclasses must implement get_primary_keys_query() method")
+
+    def get_foreign_key_query(self):
+        """
+        Get the SQL query to retrieve foreign key information from the database.
+
+        Returns:
+            str: The SQL query to retrieve foreign key information.
+        """
+        return NotImplementedError("Subclasses must implement get_foreign_key_query() method")
+
+    def get_unique_constraints_query(self, schema_name, table_name):
+        """
+        Get the SQL query to retrieve unique constraint information from the database.
+
+        Args:
+            schema_name (str): Name of the schema.
+            table_name (str): Name of the table.
+
+        Returns:
+            str: The SQL query to retrieve unique constraint information.
+        """
+        return NotImplementedError("Subclasses must implement get_unique_constraint_query() method")
+
+    def get_referenced_row_query(self, schema, ref_table, ref_column, limit=None):
+        """
+        Generate a query to retrieve rows from a referenced table based on a specific column value.
+        This implementation is specific to PostgreSQL.
+
+        Args:
+            schema (str): The schema of the referenced table.
+            ref_table (str): The name of the referenced table.
+            ref_column (str): The name of the column used for filtering.
+            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+
+        Returns:
+            str: The generated query to retrieve the rows.
+        """
+        if limit is not None:
+            limit_clause = f"LIMIT {limit}"
+        else:
+            limit_clause = ""
+
+        query = \
+            f"SELECT * FROM {self.format_identifier(schema)}.{self.format_identifier(ref_table)} " \
+            f"WHERE {self.format_identifier(ref_column)} = %s {limit_clause}"
+        return query
+
+    # DDL generation methods
     def map_data_type(self, dataframe_type):
         """
         Method to map the data type of dataframe to a specific database column type.
@@ -376,7 +552,7 @@ class DatabaseUtilityBase:
 
             ddl = self.generate_create_schema()
             for table_name in ordered_tables:
-                database_table = get_table_by_name(database_tables, table_name)
+                database_table = DatabaseTable.get_table_by_name(database_tables, table_name)
                 formatted_table_name = self.format_identifier(database_table.table_name)
 
                 ddl += self.create_table_begin(formatted_table_name)
@@ -415,9 +591,9 @@ class DatabaseUtilityBase:
             logging.info(f"DDL is generated and written to: {ddl_file_path}")
 
         except Exception as e:
-            logging.error(f"Error generating DDL script: {str(e)}")
-            raise
+            logging.exception(f"Error generating DDL script: {str(e)}")
 
+    # Data insertion methods
     def generate_insert_statements(self, folder, database_tables):
         """
         Generates SQL insert statements for the given database tables.
@@ -459,5 +635,4 @@ class DatabaseUtilityBase:
             logging.info("Finished generating insert statements.")
 
         except Exception as e:
-            logging.error(f"Error generating insert statements: {str(e)}")
-            raise
+            logging.exception(f"Error generating insert statements: {str(e)}")

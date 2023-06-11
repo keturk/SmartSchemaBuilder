@@ -23,20 +23,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import pyodbc
 import logging
 import re
 
 import common.library as lib
-from db_utility.database import DatabaseUtilityBase
+from db_utility.database_utility import DatabaseUtility
 
 
 # noinspection SqlNoDataSourceInspection
-# A PostgreSQL specific implementation of the DatabaseUtilityBase class
-class SQLServerUtility(DatabaseUtilityBase):
+class SQLServerUtility(DatabaseUtility):
     """
-    A SQL Server specific implementation of the DatabaseUtilityBase class.
+    A SQL Server specific implementation of the Database class.
     """
 
+    # Constructor and connection methods
     def __init__(self, schema_name):
         super().__init__(schema_name)
 
@@ -80,6 +81,199 @@ class SQLServerUtility(DatabaseUtilityBase):
 
         logging.info("SQL Server utility created successfully.")
 
+    def connect(self, host, port, database, username, password):
+        """
+        Connect to the MySQL database.
+
+        Args:
+            host (str): Hostname or IP address of the database server.
+            port (int): Port number of the database server.
+            database (str): Name of the database.
+            username (str): Username for authentication.
+            password (str): Password for authentication.
+
+        Returns:
+            tuple: Database connection and cursor objects.
+
+        """
+        # Set the default port if not provided
+        if not port:
+            port = DatabaseUtility.DEFAULT_PORTS['sqlserver']
+
+        logging.info(f"Connecting to SQL Server database '{database}' on host '{host}' and port '{port}'.")
+        self.connection = pyodbc.connect(
+            f'DRIVER={{SQL Server}};SERVER={host},{port};DATABASE={database};UID={username};PWD={password}')
+        self.cursor = self.connection.cursor()
+        self.host = host
+        self.port = port
+        self.user = username
+        self.password = password
+        self.database = database
+
+    # Query execution methods
+    def execute_sql_statements(self, sql_statements):
+        """
+        Execute SQL statements using the provided database connection and cursor.
+
+        Args:
+            sql_statements (str): SQL statements to execute.
+
+        Returns:
+            str: The SQL statements executed.
+
+        """
+        # Execute the SQL statements
+        self.execute_query(sql_statements)
+        self.commit()
+
+        # Return the executed SQL statements
+        return sql_statements
+
+    # Query generation methods
+    def get_select_query(self, table_name, columns=None, where=None, limit=None):
+        """
+        Get the SQL query to retrieve rows from a table in SQL Server.
+
+        Args:
+            table_name (str): The name of the table.
+            columns (list[str], optional): The columns to retrieve. Defaults to None, which retrieves all columns.
+            where (str, optional): The WHERE clause condition. Defaults to None.
+            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+
+        Returns:
+            str: The generated SQL query.
+        """
+        # Start building the SELECT query
+        query = "SELECT"
+
+        # Add the column names or * for all columns
+        if columns is None:
+            query += " *"
+        else:
+            query += " " + ", ".join(columns)
+
+        # Add the table name
+        query += " FROM " + table_name
+
+        # Add the WHERE clause if provided
+        if where is not None:
+            query += " WHERE " + where
+
+        # Add the TOP clause if limit is provided
+        if limit is not None:
+            query = query.replace("SELECT", "SELECT TOP " + str(limit))
+
+        return query
+
+    def get_column_query(self):
+        """
+        Get the SQL query to retrieve column information from the database.
+
+        Returns:
+            str: The SQL query to retrieve column information.
+        """
+        return (
+            "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE "
+            "FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_NAME = ?"
+        )
+
+    def get_primary_keys_query(self, schema_name, table_name):
+        """
+        Get the primary keys of a table in SQL Server.
+
+        Args:
+            schema_name (str): The name of the schema.
+            table_name (str): The name of the table.
+
+        Returns:
+            list: The list of primary key column names.
+        """
+        query = """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+                AND TABLE_SCHEMA = ?
+                AND TABLE_NAME = ?;
+        """
+        return query, (schema_name, table_name)
+
+    def get_foreign_key_query(self):
+        """
+        Get the SQL query to retrieve foreign key information from the database.
+
+        Returns:
+            str: The SQL query to retrieve foreign key information.
+        """
+        return ("""
+            SELECT
+              kcu.COLUMN_NAME,
+              ccu.TABLE_NAME AS referenced_table_name,
+              ccu.COLUMN_NAME AS referenced_column_name,
+              rc.CONSTRAINT_NAME,
+              rc.UPDATE_RULE,
+              rc.DELETE_RULE
+            FROM
+              INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+              JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+                ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+              JOIN INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE ccu
+                ON rc.UNIQUE_CONSTRAINT_NAME = ccu.CONSTRAINT_NAME
+            WHERE
+              kcu.TABLE_SCHEMA = ? AND
+              kcu.TABLE_NAME = ?;
+        """)
+
+    def get_referenced_row_query(self, schema, ref_table, ref_column, limit=None):
+        """
+        Generate a query to retrieve rows from a referenced table based on a specific column value.
+        This implementation is specific to SQL Server.
+
+        Args:
+            schema (str): The schema of the referenced table.
+            ref_table (str): The name of the referenced table.
+            ref_column (str): The name of the column used for filtering.
+            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+
+        Returns:
+            str: The generated query to retrieve the rows.
+        """
+        if limit is not None:
+            limit_clause = f"TOP {limit} "
+        else:
+            limit_clause = ""
+
+        query = \
+            f"SELECT {limit_clause}* FROM {self.format_identifier(schema)}.{self.format_identifier(ref_table)} " \
+            f"WHERE {self.format_identifier(ref_column)} = ?"
+        return query
+
+    def get_unique_constraints_query(self, schema_name, table_name):
+        """
+        Returns a list of unique constraints for the given table.
+
+        Args:
+            schema_name (str): Name of the schema.
+            table_name (str): Name of the table.
+
+        Returns:
+            list: List of unique constraints.
+        """
+        query = """
+            SELECT
+                ccu.column_name AS column_name
+            FROM
+                information_schema.table_constraints AS tc
+                JOIN information_schema.constraint_column_usage AS ccu
+                    ON tc.constraint_name = ccu.constraint_name
+            WHERE
+                tc.constraint_type = 'UNIQUE'
+                AND tc.table_schema = ?
+                AND tc.table_name = ?
+        """
+        return query, (schema_name, table_name)
+
+    # DDL generation methods
     def map_data_type(self, dataframe_type):
         """
         Map pandas dataframe types to SQL Server data types.

@@ -27,6 +27,7 @@ SOFTWARE.
 import os
 import csv
 import click
+import getpass
 import logging
 from dotenv import load_dotenv
 from pattern.text import singularize
@@ -115,6 +116,14 @@ def get_int_from_env(key: str, default_value: int = None) -> int:
     except ValueError:
         logging.error(f"Environment variable '{key}' is not a valid integer.")
         raise ValueError(f"Environment variable '{key}' is not a valid integer.")
+
+
+def get_password():
+    password = get_str_from_env('DB_PASSWORD')
+    # If the password is not set as an environment variable, prompt the user for it
+    if not password:
+        password = getpass.getpass('Enter the password: ')
+    return password
 
 
 def get_csv_delimiter(file_path, fallback_delimiter=','):
@@ -215,12 +224,11 @@ def truncate(constraint_name, max_length=128):
     max_constraint_length = max_length - 5  # Subtract 5 for the 5-digit hash
 
     # Check if the constraint name exceeds the maximum length
-    if len(constraint_name) > max_constraint_length:
-        # Truncate the constraint name to fit within the maximum length
-        truncated_name = constraint_name[:max_constraint_length]
-    else:
-        # Use the original constraint name if it's already within the maximum length
-        truncated_name = constraint_name
+    if len(constraint_name) <= max_constraint_length:
+        return constraint_name
+
+    # Truncate the constraint name to fit within the maximum length
+    truncated_name = constraint_name[:max_constraint_length]
 
     # Generate a hash of the non-truncated constraint name
     name_hash = hashlib.md5(constraint_name.encode()).hexdigest()[:5]

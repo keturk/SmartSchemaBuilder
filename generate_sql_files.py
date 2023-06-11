@@ -31,8 +31,11 @@ import common.library as common_library
 import common.openai_utility as openai
 import logging
 
-import db_utility.database as database_utility
+import json
+from db_utility.database_utility import DatabaseUtility
 from db_utility.database_table import DatabaseTable
+from db_utility.database_column import DatabaseColumn
+from db_utility.database_foreign_key import DatabaseForeignKey
 
 common_library.configure_logging('generate_sql_files.log', logging.INFO)
 
@@ -79,13 +82,13 @@ def get_table_names(database_tables, folder):
         database_tables[csv_file].update_table_name(suggested_name)
 
 
-def load_csv_files(folder, csv_filenames, db_generator):
+def load_csv_files(folder, csv_filenames, db):
     """
     Function to load CSV files from a given folder into pandas dataframes.
 
     :param folder: The folder path where the CSV files are located.
     :param csv_filenames: A list of CSV filenames.
-    :param db_generator: A DatabaseUtilityBase object.
+    :param db: A Database object.
     :return: A dictionary containing database tables with CSV filenames as keys and DatabaseTable objects as values.
     """
 
@@ -101,7 +104,7 @@ def load_csv_files(folder, csv_filenames, db_generator):
                                     keep_default_na=False, skipinitialspace=True)
             dataframe = dataframe.convert_dtypes()
             database_tables[csv_filename] = DatabaseTable.from_dataframe(
-                db_generator, dataframe, csv_filename, table_name)
+                db, dataframe, csv_filename, table_name)
             logging.info(f"Successfully loaded CSV file: {csv_filename}")
         except pd.errors.EmptyDataError:
             logging.warning(f"Empty CSV file: {csv_filename}")
@@ -232,7 +235,7 @@ def find_foreign_keys(database_tables):
                 if common_library.lemma_compare(table_name, referenced_table_name):
                     continue
 
-                referenced_table = database_utility.get_table_by_name(database_tables, referenced_table_name)
+                referenced_table = DatabaseTable.get_table_by_name(database_tables, referenced_table_name)
 
                 # Add the foreign key relationship if the referenced table and column exist
                 if referenced_table:
@@ -244,7 +247,7 @@ def find_foreign_keys(database_tables):
                             logging.info(f"Found foreign key relationship: {database_table.table_name}.{column_name} "
                                          f"references {referenced_table.table_name}.{referenced_primary_key}")
                         else:
-                            referenced_column = referenced_table.get_column_by_name('id')
+                            referenced_column, column_index = referenced_table.get_column_by_name('id')
                             if referenced_column:
                                 database_table.add_foreign_key(column_name, referenced_table.table_name,
                                                                referenced_column.column_name)
@@ -259,10 +262,92 @@ def find_foreign_keys(database_tables):
                                     f"(Referenced table name: {referenced_table_name})")
 
 
+def load_schema_from_json(folder, schema, database_tables):
+    """
+    Load the schema information from a JSON file and create DatabaseTable, DatabaseColumn, and DatabaseForeignKey instances.
+
+    Args:
+        folder (str): Path to the folder containing the JSON file.
+        schema (str): The name of the schema.
+        database_tables (dict): A dictionary containing DatabaseTable instances.
+
+    Returns:
+        bool: True if the schema was loaded successfully, False otherwise.
+    """
+    json_filename = os.path.join(folder, f"ddl_{schema}.json")
+
+    if not os.path.isfile(json_filename):
+        logging.error(f"JSON file '{json_filename}' not found.")
+        return False
+
+    try:
+        with open(json_filename, 'r') as f:
+            schema_data = json.load(f)
+
+        for table_name, table_info in schema_data.items():
+            # Find the corresponding DatabaseTable object
+            database_table = DatabaseTable.get_table_by_name(database_tables, table_name)
+
+            if database_table is None:
+                logging.warning(f"Table '{table_name}' not found in the loaded CSV files.")
+                continue
+
+            columns = []
+            foreign_keys = []
+
+            # Extract columns information
+            for column_info in table_info['columns']:
+                if isinstance(column_info, str):
+                    column_info = json.loads(column_info)
+
+                column_name = column_info['name']
+                column_type = column_info['type']
+                nullable = column_info['nullable']
+                unique = column_info['unique']
+
+                # Extract column size if available
+                column_size = column_info.get('size')
+
+                # Create DatabaseColumn instance
+                column = DatabaseColumn(column_name, column_type, column_size, nullable, unique)
+                columns.append(column)
+
+            # Extract primary keys
+            primary_keys = table_info['primary_keys']
+
+            # Extract foreign keys information
+            for foreign_key_info in table_info['foreign_keys']:
+                if isinstance(foreign_key_info, str):
+                    foreign_key_info = json.loads(foreign_key_info)
+
+                foreign_key_column = foreign_key_info['column']
+                referenced_table = foreign_key_info['referenced_table']
+                referenced_column = foreign_key_info['referenced_column']
+                on_update_action = foreign_key_info['on_update_action']
+                on_delete_action = foreign_key_info['on_delete_action']
+
+                # Create DatabaseForeignKey instance
+                foreign_key = DatabaseForeignKey(foreign_key_column, referenced_table, referenced_column,
+                                                 on_update_action, on_delete_action)
+                foreign_keys.append(foreign_key)
+
+            # Update the DatabaseTable object with the extracted information
+            database_table.columns = columns
+            database_table.primary_keys = primary_keys
+            database_table.foreign_keys = foreign_keys
+
+        logging.info(f"Schema loaded from JSON file: '{json_filename}'")
+        return True
+
+    except (IOError, json.JSONDecodeError) as e:
+        logging.error(f"Error loading schema from JSON file: {str(e)}")
+        return False
+
+
 @click.command()
 @click.argument('folder')
 @click.option('--folder', prompt='Enter the directory path containing the SQL files')
-@click.option('--db-type', type=common_library.CaseInsensitiveChoice(database_utility.SUPPORTED_DATABASES), prompt=True)
+@click.option('--db-type', type=common_library.CaseInsensitiveChoice(DatabaseUtility.SUPPORTED_DATABASES), prompt=True)
 @click.option('--schema', default=None, prompt='Enter the database schema name (optional)')
 def generate_sql_files(folder: str, db_type: str, schema: str):
     """
@@ -287,33 +372,36 @@ def generate_sql_files(folder: str, db_type: str, schema: str):
         logging.error("Error: The specified folder does not exist.")
         return
 
-    # Create a database utility instance for the specified database type
-    db_generator = database_utility.create(db_type, schema)
+    # Create a database instance for the specified database type
+    db = DatabaseUtility.create(db_type, schema)
 
     # get names of CSV files in folder
     csv_filenames = common_library.get_csv_filenames(folder)
 
     # Load CSV files into Pandas dataframes
-    database_tables = load_csv_files(folder, csv_filenames, db_generator)
+    database_tables = load_csv_files(folder, csv_filenames, db)
 
-    if use_openai:
-        # Generate meaningful names for the files using OpenAI API
-        get_table_names(database_tables, folder)
+    schema_found = load_schema_from_json(folder, schema, database_tables)
 
-    # Find primary keys in the tables
-    find_primary_keys(database_tables)
+    if not schema_found:
+        if use_openai:
+            # Generate meaningful names for the files using OpenAI API
+            get_table_names(database_tables, folder)
 
-    # Find foreign keys in the tables
-    find_foreign_keys(database_tables)
+        # Find primary keys in the tables
+        find_primary_keys(database_tables)
 
-    # Find unique indexes in the tables
-    find_unique_indexes(database_tables)
+        # Find foreign keys in the tables
+        find_foreign_keys(database_tables)
+
+        # Find unique indexes in the tables
+        find_unique_indexes(database_tables)
 
     # Generate DDL statements
-    db_generator.generate_ddl(folder, database_tables)
+    db.generate_ddl(folder, database_tables)
 
     # Generate insert statements
-    db_generator.generate_insert_statements(folder, database_tables)
+    db.generate_insert_statements(folder, database_tables)
 
     logging.info("SQL file generation completed successfully.")
 

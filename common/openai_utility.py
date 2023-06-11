@@ -27,6 +27,7 @@ import os
 import atexit
 import logging
 import openai
+
 from common.library import get_str_from_env, get_int_from_env
 
 
@@ -67,7 +68,7 @@ def cleanup_files():
                 openai.File.delete(file_id)
                 logging.info(f"File {file_id} deleted successfully.")
             except Exception as e:
-                logging.error(f"Error deleting file {file_id}: {str(e)}")
+                logging.exception(f"Error deleting file {file_id}: {str(e)}")
 
 
 def ask_openai(prompt, file_ids=None, completions=1):

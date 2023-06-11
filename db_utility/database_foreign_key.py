@@ -30,7 +30,7 @@ class DatabaseForeignKey:
     Class that represents a foreign key in a database table.
     """
 
-    def __init__(self, column_name, referenced_table, referenced_column):
+    def __init__(self, column_name, referenced_table, referenced_column, on_update_action=None, on_delete_action=None):
         """
         Initialize a DatabaseForeignKey object.
 
@@ -38,10 +38,14 @@ class DatabaseForeignKey:
             column_name (str): Name of the foreign key column.
             referenced_table (str): Name of the referenced table.
             referenced_column (str): Name of the referenced column.
+            on_update_action (str, optional): On-update action for the foreign key.
+            on_delete_action (str, optional): On-delete action for the foreign key.
         """
         self.column_name = column_name
         self.referenced_table = referenced_table
         self.referenced_column = referenced_column
+        self.on_update_action = on_update_action
+        self.on_delete_action = on_delete_action
 
     def __str__(self):
         """
@@ -50,5 +54,8 @@ class DatabaseForeignKey:
         Returns:
             str: String representation of the DatabaseForeignKey object.
         """
-        return f'Column name: {self.column_name}, Referenced table: {self.referenced_table}, ' \
-               f'Referenced column: {self.referenced_column}'
+        return f'Column name: {self.column_name}, ' \
+               f'Referenced table: {self.referenced_table}, ' \
+               f'Referenced column: {self.referenced_column}, ' \
+               f'On-update action: {self.on_update_action}, ' \
+               f'On-delete action: {self.on_delete_action}'

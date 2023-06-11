@@ -27,22 +27,20 @@ import os
 import click
 import logging
 import sqlparse
-import getpass
 
 import common.library as common_library
-import db_utility.database as database_utility
+from db_utility.database_utility import DatabaseUtility
 
+# Configure logging
 common_library.configure_logging('run_sql_files.log', logging.INFO)
 
 
-def execute_ddl_file(db_type, conn, cursor, ddl_file, folder):
+def execute_ddl_file(db, ddl_file, folder):
     """
     Execute the DDL statements from a file.
 
     Args:
-        db_type (str): Database type.
-        conn: Database connection object.
-        cursor: Database cursor object.
+        db: Database Utility instance.
         ddl_file (str): Name of the DDL file to execute.
         folder (str): Path to the folder where the DDL file is located.
 
@@ -55,13 +53,11 @@ def execute_ddl_file(db_type, conn, cursor, ddl_file, folder):
         ddl_statements = f.read()
 
     try:
-        database_utility.execute_sql_statements(db_type, conn, cursor, ddl_statements)
-        conn.commit()
+        db.execute_sql_statements(ddl_statements)
         logging.info(f"Executed DDL file: {ddl_file}")
     except Exception as e:
-        conn.rollback()
-        logging.error(f"Failed to execute DDL file: {ddl_file}")
-        logging.error(str(e))
+        db.rollback()
+        logging.exception(f"Failed to execute DDL file: {ddl_file}\n\nAn error occurred: {str(e)}")
 
     return ddl_statements
 
@@ -99,13 +95,12 @@ def extract_table_names(ddl_statements):
     return table_names
 
 
-def execute_insert_file(conn, cursor, folder, table):
+def execute_insert_file(db, folder, table):
     """
     Execute the insert statements from a file for a specific table.
 
     Args:
-        conn: Database connection object.
-        cursor: Database cursor object.
+        db: Database Utility instance.
         folder (str): Path to the folder where the insert file is located.
         table (str): Name of the table for which insert statements will be executed.
 
@@ -119,20 +114,20 @@ def execute_insert_file(conn, cursor, folder, table):
             insert_statements = insert_file.read().replace("'NULL'", 'NULL')
 
             # Execute the insert statements
-            cursor.execute(insert_statements)
+            db.execute_query(insert_statements)
             # Commit the changes
-            conn.commit()
+            db.commit()
 
             logging.info(f"Insert statements for table '{table}' executed successfully")
     except IOError as e:
-        logging.error(f"Error reading insert file '{insert_file_path}': {str(e)}")
+        logging.exception(f"Error reading insert file '{insert_file_path}'\n\nAn error occurred: {str(e)}")
     except Exception as e:
-        logging.error(f"Error executing insert statements for table '{table}': {str(e)}")
-        conn.rollback()
+        logging.exception(f"Error executing insert statements for table '{table}': {str(e)}")
+        db.rollback()
 
 
 @click.command()
-@click.option('--db-type', type=common_library.CaseInsensitiveChoice(database_utility.SUPPORTED_DATABASES), prompt=True)
+@click.option('--db-type', type=common_library.CaseInsensitiveChoice(DatabaseUtility.SUPPORTED_DATABASES), prompt=True)
 @click.option('--host', prompt='Enter the database host address')
 @click.option('--port', default=None, type=int, help='Enter the database port number')
 @click.option('--database', prompt='Enter the database name')
@@ -153,10 +148,7 @@ def run_sql_files(db_type, host, port, database, username, folder):
         folder (str): The directory path containing the SQL files.
     """
 
-    password = common_library.get_str_from_env('DB_PASSWORD')
-    # If the password is not set as an environment variable, prompt the user for it
-    if not password:
-        password = getpass.getpass('Enter the password: ')
+    password = common_library.get_password()
 
     folder = os.path.abspath(folder)
     # Check if the specified folder exists
@@ -172,17 +164,17 @@ def run_sql_files(db_type, host, port, database, username, folder):
     if not ddl_files:
         raise ValueError('No DDL files found.')
 
-    conn = None
-    cursor = None
+    db = None
     try:
-        conn = database_utility.connect_to_database(db_type, host, port, database, username, password)
-        cursor = conn.cursor()
+        # Create a database instance for the specified database type
+        db = DatabaseUtility.create(db_type)
+        db.connect(host, port, database, username, password)
 
         # Execute DDL files
         logging.info('Executing DDL files...')
         for ddl_file in ddl_files:
             # Execute the DDL statements from the file
-            ddl_statements = execute_ddl_file(db_type, conn, cursor, ddl_file, folder)
+            ddl_statements = execute_ddl_file(db, ddl_file, folder)
 
             # Extract table names from the DDL statements
             table_names = extract_table_names(ddl_statements)
@@ -191,20 +183,16 @@ def run_sql_files(db_type, host, port, database, username, folder):
             # Execute INSERT files in the order of table names
             for table in table_names:
                 # Execute the insert statements for the table
-                execute_insert_file(conn, cursor, folder, table)
+                execute_insert_file(db, folder, table)
 
     except Exception as e:
-        logging.error(f"An error occurred: {str(e)}")
-        # Rollback any changes
-        if conn:
-            conn.rollback()
+        if db:
+            db.rollback()
+        logging.exception(f"An error occurred: {str(e)}")
 
     finally:
-        # Close the cursor and database connection
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        if db:
+            db.close()
 
     logging.info('Script execution completed.')
 

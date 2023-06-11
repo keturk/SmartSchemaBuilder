@@ -4,7 +4,7 @@ definition_id,type_id,name,description
 2,3,Lakeisha Montes,Anne bought new car. Anne is walking. John bought new car. John has free time. Tony is walking. 
 3,65,Colleen Proctor,John bought new car. Anne is walking. Anne is walking. John is shopping. John is shopping. 
 4,71,Alice Velazquez,Tony bought new car. Tony has free time. Tony bought new car. 
-5,,Bernard Wilkins,Anne bought new car. Tony is shopping. Tony is shopping. Tony has free time. Anne bought new car. 
+5,None,Bernard Wilkins,Anne bought new car. Tony is shopping. Tony is shopping. Tony has free time. Anne bought new car. 
 6,96,Howard Randall,Anne bought new car. Anne has free time. John bought new car. 
 7,93,Hector Dickson,John is shopping. John bought new car. 
 8,94,Vernon Rodgers,Anne bought new car. Anne bought new car. Tony bought new car. John bought new car. 
@@ -13,32 +13,32 @@ definition_id,type_id,name,description
 11,34,Ruby Robinson,John is walking. John bought new car. John has free time. John has free time. John has free time. 
 12,29,Joni Larsen,Tony bought new car. Tony is walking. Tony bought new car. Tony has free time. 
 13,50,Duane Dickerson,Anne has free time. Anne bought new car. Tony bought new car. 
-14,11,Harry Brennan,
+14,11,Harry Brennan,None
 15,77,Luz Bass,Anne is walking. Tony has free time. Tony has free time. 
 16,65,Salvatore Morse,Tony is shopping. Anne is walking. Tony is shopping. Tony bought new car. John has free time. 
-17,,Byron Boone,
+17,None,Byron Boone,None
 18,76,Sammy Herring,Anne bought new car. Anne bought new car. Tony bought new car. 
 19,62,Anthony Martin,John is walking. Anne is walking. John is shopping. Tony has free time. John has free time. 
 20,87,Sarah Huerta,Tony bought new car. Tony is walking. 
 21,45,Gavin Chapman,Tony bought new car. Tony is walking. John bought new car. Anne has free time. Tony is walking. 
-22,0,Candice Pacheco,
-23,,Terrell Calderon,Tony bought new car. John bought new car. John bought new car. Tony has free time. 
+22,0,Candice Pacheco,None
+23,None,Terrell Calderon,Tony bought new car. John bought new car. John bought new car. Tony has free time. 
 24,52,Travis Patel,Tony has free time. John is walking. John bought new car. Tony bought new car. 
-25,,Derek Mills,Tony bought new car. John is walking. 
+25,None,Derek Mills,Tony bought new car. John is walking. 
 26,70,Guy Mcgrath,John is shopping. Anne has free time. John bought new car. Tony is shopping. Anne bought new car. 
 27,27,Kelley Huynh,Tony bought new car. John bought new car. 
-28,7,Cara Lamb,
+28,7,Cara Lamb,None
 29,61,Charles Edwards,Anne is shopping. Anne is walking. Tony has free time. Anne bought new car. John has free time. 
-30,95,Chris Holden,
+30,95,Chris Holden,None
 31,27,Freddie Hutchinson,John bought new car. Anne has free time. John has free time. Tony bought new car. John bought new car. 
 32,19,Jennifer Edwards,John has free time. Tony is walking. John bought new car. Anne bought new car. John is shopping. 
 33,0,Monte Reynolds,John bought new car. Anne is shopping. Tony bought new car. John is shopping. Anne has free time. 
-34,,Jeremiah Horn,John has free time. Anne is walking. Anne has free time. Tony bought new car. John is shopping. 
+34,None,Jeremiah Horn,John has free time. Anne is walking. Anne has free time. Tony bought new car. John is shopping. 
 35,16,Cynthia Kirk,Anne has free time. John is walking. Tony is shopping. Anne bought new car. Tony is walking. 
 36,17,Gilbert Velasquez,Anne has free time. Anne has free time. Anne bought new car. John bought new car. 
 37,54,Bethany Pittman,Anne bought new car. Tony has free time. John is shopping. Tony has free time. 
 38,97,Lonnie Mathis,Tony is walking. Tony is shopping. Tony has free time. John is shopping. John has free time. 
-39,24,Terri Adams,
+39,24,Terri Adams,None
 40,39,Candice Bray,Tony is walking. John is walking. 
 41,21,Ashley Bender,Tony bought new car. Tony has free time. Tony bought new car. 
 42,43,Darrick Mack,John bought new car. Anne is shopping. John bought new car. John has free time. Tony has free time. 
@@ -55,14 +55,14 @@ definition_id,type_id,name,description
 53,46,Jeanette Allen,Anne bought new car. Tony bought new car. 
 54,33,Tracie Strong,Anne bought new car. Tony is walking. John has free time. 
 55,44,Esther Best,Tony has free time. John has free time. John is shopping. Tony has free time. John is walking. 
-56,,Joann Stanton,Anne bought new car. Anne has free time. Tony has free time. John has free time. 
-57,18,Jesse Vasquez,
+56,None,Joann Stanton,Anne bought new car. Anne has free time. Tony has free time. John has free time. 
+57,18,Jesse Vasquez,None
 58,63,Marcos Daugherty,Anne bought new car. Tony is shopping. 
 59,27,Kellie Davenport,John bought new car. John is walking. Anne has free time. Anne is walking. Tony bought new car. 
 60,34,Neil Briggs,John is shopping. Tony is walking. Tony has free time. John has free time. Tony has free time. 
 61,26,Andre Beard,Tony bought new car. Anne has free time. 
-62,11,Jenny Pacheco,
-63,13,Damien Sampson,
+62,11,Jenny Pacheco,None
+63,13,Damien Sampson,None
 64,54,Mandi Church,Anne bought new car. Anne bought new car. Tony has free time. John bought new car. Tony has free time. 
 65,49,Alexander Robinson,John bought new car. John has free time. John is walking. Tony has free time. John bought new car. 
 66,1,Misty Mullins,John has free time. John is walking. Tony is shopping. Anne is shopping. Tony has free time. 
@@ -82,25 +82,25 @@ definition_id,type_id,name,description
 80,9,Ross Floyd,Anne bought new car. John is shopping. Anne bought new car. Tony has free time. Tony has free time. 
 81,43,Brandie Howell,Anne bought new car. Anne has free time. Tony bought new car. John bought new car. John bought new car. 
 82,32,Jon Wise,Tony bought new car. Anne has free time. John bought new car. Anne has free time. Tony is shopping. 
-83,,Brandie Norton,Tony is shopping. Tony bought new car. John bought new car. Anne bought new car. Tony bought new car. 
+83,None,Brandie Norton,Tony is shopping. Tony bought new car. John bought new car. Anne bought new car. Tony bought new car. 
 84,63,Latonya Lynn,Anne bought new car. Tony has free time. Tony bought new car. 
 85,20,Saul Carrillo,Tony is shopping. Anne has free time. Anne bought new car. Tony has free time. Tony has free time. 
 86,88,Kenny Barajas,Tony bought new car. John has free time. Anne bought new car. 
 87,70,Aimee Campos,John bought new car. Anne is walking. John has free time. John has free time. Tony has free time. 
 88,72,Melissa Mcclain,Anne is walking. Anne is shopping. 
 89,50,Jocelyn Washington,Anne is walking. John has free time. John bought new car. Tony bought new car. John bought new car. 
-90,,Claude Lynch,Anne bought new car. Anne is walking. John bought new car. John bought new car. John has free time. 
+90,None,Claude Lynch,Anne bought new car. Anne is walking. John bought new car. John bought new car. John has free time. 
 91,13,Vicki Ward,Anne bought new car. Tony bought new car. Tony bought new car. Tony bought new car. Anne is shopping. 
-92,59,Penny Bolton,
+92,59,Penny Bolton,None
 93,94,Yolanda Frost,John has free time. Anne is shopping. Anne bought new car. Anne has free time. Tony is walking. 
-94,50,Bobbie Hickman,
+94,50,Bobbie Hickman,None
 95,65,Dylan Edwards,Tony bought new car. Tony is walking. John has free time. John has free time. John is walking. 
 96,70,Mandy Huber,Tony has free time. Anne has free time. Tony bought new car. 
 97,26,Andres Woodward,Anne bought new car. Anne is walking. John bought new car. John has free time. John has free time. 
-98,,Lynn Charles,Anne bought new car. John is walking. John bought new car. Tony is shopping. Tony bought new car. 
-99,,Kelvin Ryan,Anne is walking. Anne bought new car. Anne bought new car. Tony bought new car. 
-100,59,Christi Estes,
-101,,Preston James,Anne is shopping. Anne is walking. John has free time. 
+98,None,Lynn Charles,Anne bought new car. John is walking. John bought new car. Tony is shopping. Tony bought new car. 
+99,None,Kelvin Ryan,Anne is walking. Anne bought new car. Anne bought new car. Tony bought new car. 
+100,59,Christi Estes,None
+101,None,Preston James,Anne is shopping. Anne is walking. John has free time. 
 102,59,Xavier Vega,Anne bought new car. Anne is walking. 
 103,7,Tammy Mc Gee,Anne bought new car. John bought new car. John bought new car. Tony is shopping. 
 104,7,Sheri Gray,Anne is shopping. John is walking. Tony bought new car. Anne is shopping. John has free time. 
@@ -111,20 +111,20 @@ definition_id,type_id,name,description
 109,35,Shanna Harrison,Anne bought new car. John is shopping. John is shopping. John has free time. 
 110,59,Elena Munoz,Tony bought new car. Anne bought new car. Tony has free time. John is walking. Anne has free time. 
 111,29,Margarita Ferrell,Anne bought new car. Tony is walking. Tony bought new car. Tony has free time. 
-112,,Manuel Olson,
+112,None,Manuel Olson,None
 113,82,Russell Lester,Tony is shopping. Anne has free time. John has free time. 
 114,53,Crystal Griffin,Anne is shopping. Anne has free time. Tony bought new car. John is walking. Tony has free time. 
 115,64,Alice Ewing,Tony bought new car. John is shopping. John bought new car. John bought new car. John bought new car. 
-116,97,Chasity Chavez,
+116,97,Chasity Chavez,None
 117,86,Bethany Bennett,Tony has free time. John is shopping. Tony bought new car. Tony has free time. Tony has free time. 
 118,79,Marianne Meyer,Anne has free time. John is shopping. Tony has free time. Anne has free time. Anne has free time. 
 119,84,Blanca Moyer,Tony has free time. John is walking. Anne has free time. John bought new car. Tony bought new car. 
-120,,Devon Clayton,John is shopping. John bought new car. John is shopping. John has free time. Tony bought new car. 
+120,None,Devon Clayton,John is shopping. John bought new car. John is shopping. John has free time. Tony bought new car. 
 121,45,Alvin Diaz,Anne bought new car. Anne has free time. John has free time. 
-122,86,Jessie Griffin,
+122,86,Jessie Griffin,None
 123,90,Jeanette Chung,John bought new car. Anne is shopping. John has free time. Tony has free time. John has free time. 
-124,,Trenton Small,
-125,,Billie Sanford,Anne is shopping. Anne is shopping. John is shopping. 
+124,None,Trenton Small,None
+125,None,Billie Sanford,Anne is shopping. Anne is shopping. John is shopping. 
 126,76,Darin Hull,Anne is shopping. John has free time. Tony has free time. Tony has free time. John is shopping. 
 127,42,Dale Kirby,Anne has free time. Anne is shopping. Tony bought new car. John has free time. 
 128,99,Rachel Valdez,Tony is walking. Anne is walking. 
@@ -136,15 +136,15 @@ definition_id,type_id,name,description
 134,24,Marcia Nielsen,John is shopping. John has free time. Anne has free time. 
 135,24,Harold Huynh,John bought new car. Tony is shopping. John bought new car. John is walking. 
 136,70,Tyler Bautista,John is walking. John is shopping. John bought new car. Tony bought new car. John is walking. 
-137,33,Maureen Lewis,
-138,60,Grace Arnold,
+137,33,Maureen Lewis,None
+138,60,Grace Arnold,None
 139,31,Marci Clayton,John bought new car. Anne has free time. 
 140,2,Kisha Hernandez,Anne bought new car. John is walking. Anne has free time. Tony bought new car. John has free time. 
 141,45,Ashley Vaughn,John has free time. Anne is walking. John bought new car. John has free time. Tony is shopping. 
 142,36,Sherri Chase,Anne bought new car. Anne bought new car. 
 143,46,Dorothy Tanner,Anne bought new car. Tony bought new car. Anne bought new car. John has free time. 
 144,17,Tony Mendoza,John is shopping. John bought new car. Tony bought new car. Tony is shopping. Tony bought new car. 
-145,,Jacob Barton,Anne is shopping. Anne is shopping. John bought new car. John is walking. John is shopping. 
+145,None,Jacob Barton,Anne is shopping. Anne is shopping. John bought new car. John is walking. John is shopping. 
 146,82,Oliver Hawkins,Tony is walking. Anne is shopping. Tony is walking. Tony bought new car. Tony has free time. 
 147,57,Diana Vaughan,Anne bought new car. Anne is shopping. Anne is shopping. Anne has free time. John has free time. 
 148,91,Jamal Pham,Anne is shopping. Tony is walking. John is walking. 

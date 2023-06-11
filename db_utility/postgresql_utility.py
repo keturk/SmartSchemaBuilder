@@ -23,18 +23,20 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import psycopg2
 import logging
 import re
 
 import common.library as lib
-from db_utility.database import DatabaseUtilityBase
+from db_utility.database_utility import DatabaseUtility
 
 
-class PostgreSQLUtility(DatabaseUtilityBase):
+class PostgreSQLUtility(DatabaseUtility):
     """
-    A PostgreSQL specific implementation of the DatabaseUtilityBase class.
+    A PostgreSQL specific implementation of the Database class.
     """
 
+    # Constructor and connection methods
     def __init__(self, schema_name):
         super().__init__(schema_name)
 
@@ -79,6 +81,168 @@ class PostgreSQLUtility(DatabaseUtilityBase):
         # Initialize the logger for logging purposes
         logging.info("PostgreSQL utility created successfully.")
 
+    def connect(self, host, port, database, username, password):
+        """
+        Connect to the PostgreSQL database.
+
+        Args:
+            host (str): Hostname or IP address of the database server.
+            port (int): Port number of the database server.
+            database (str): Name of the database.
+            username (str): Username for authentication.
+            password (str): Password for authentication.
+
+        Returns:
+            tuple: Database connection and cursor objects.
+
+        """
+        # Set the default port if not provided
+        if not port:
+            port = DatabaseUtility.DEFAULT_PORTS['postgresql']
+
+        logging.info(f"Connecting to PostgreSQL database '{database}' on host '{host}' and port '{port}'.")
+        self.connection = psycopg2.connect(
+            host=host, port=port, database=database, user=username, password=password)
+        self.cursor = self.connection.cursor()
+        self.host = host
+        self.port = port
+        self.user = username
+        self.password = password
+        self.database = database
+
+    def dump_unread_results(self):
+        """
+        Dumps and logs any unread result sets in the cursor.
+
+        Returns:
+            None
+        """
+        try:
+            if self.cursor is None:
+                raise Exception("Cursor is not established. Call connect() method first.")
+
+            while True:
+                result = self.cursor.fetchone()
+                if result is None:
+                    break
+                logging.warning("Unread result: %s", result)
+
+        except Exception as ex:
+            logging.error(f"An error occurred while processing remaining result sets: {ex}")
+
+    # Query execution methods
+    def execute_sql_statements(self, sql_statements):
+        """
+        Execute SQL statements using the provided database connection and cursor.
+
+        Args:
+            sql_statements (str): SQL statements to execute.
+
+        Returns:
+            str: The SQL statements executed.
+
+        """
+        # Execute the SQL statements
+        try:
+            self.cursor.execute(sql_statements)
+        except Exception as e:
+            logging.error(f"An error occurred while executing the SQL statements: {e}")
+            raise
+
+        # Commit the transaction
+        self.connection.commit()
+
+        # Return the executed SQL statements
+        return sql_statements
+
+    # Query generation methods
+    def get_column_query(self):
+        """
+        Get the SQL query to retrieve column information from the database.
+
+        Returns:
+            str: The SQL query to retrieve column information.
+        """
+        return (
+            "SELECT column_name, data_type, character_maximum_length, is_nullable "
+            "FROM information_schema.columns WHERE table_name = %s"
+        )
+
+    def get_primary_keys_query(self, schema_name, table_name):
+        """
+        Get the primary keys of a table in PostgreSQL.
+
+        Args:
+            schema_name (str): The name of the schema.
+            table_name (str): The name of the table.
+
+        Returns:
+            list: The list of primary key column names.
+        """
+        query = """
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid
+                AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = %s::regclass
+                AND i.indisprimary;
+        """
+        return query, (f"{schema_name}.{table_name}",)
+
+    def get_foreign_key_query(self):
+        """
+        Get the SQL query to retrieve foreign key information from the database.
+
+        Returns:
+            str: The SQL query to retrieve foreign key information.
+        """
+        return ("""
+            SELECT
+              kcu.column_name,
+              ccu.table_name AS referenced_table_name,
+              ccu.column_name AS referenced_column_name,
+              rc.constraint_name,
+              rc.update_rule,
+              rc.delete_rule
+            FROM
+              information_schema.key_column_usage kcu
+              JOIN information_schema.constraint_column_usage ccu
+                ON kcu.constraint_name = ccu.constraint_name
+              JOIN information_schema.table_constraints tc
+                ON kcu.constraint_name = tc.constraint_name
+              JOIN information_schema.referential_constraints rc
+                ON tc.constraint_name = rc.constraint_name
+            WHERE
+              kcu.table_schema = %s AND
+              kcu.table_name = %s 
+        """)
+
+    def get_unique_constraints_query(self, schema_name, table_name):
+        """
+        Returns a list of unique constraints for the given table.
+
+        Args:
+            schema_name (str): Name of the schema.
+            table_name (str): Name of the table.
+
+        Returns:
+            list: List of unique constraints.
+        """
+        query = """
+            SELECT
+                ccu.column_name AS column_name
+            FROM
+                information_schema.table_constraints AS tc
+                JOIN information_schema.constraint_column_usage AS ccu
+                    ON tc.constraint_name = ccu.constraint_name
+            WHERE
+                tc.constraint_type = 'UNIQUE'
+                AND tc.table_schema = %s
+                AND tc.table_name = %s
+        """
+        return query, (schema_name, table_name)
+
+    # DDL generation methods
     def map_data_type(self, dataframe_type):
         """
         Map pandas dataframe types to PostgreSQL data types.

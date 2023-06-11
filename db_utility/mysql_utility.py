@@ -23,19 +23,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import mysql.connector
 import logging
 import re
 
 import common.library as lib
-from db_utility.database import DatabaseUtilityBase
+from db_utility.database_utility import DatabaseUtility
 from db_utility.database_column import DatabaseColumn
 
 
-class MySQLUtility(DatabaseUtilityBase):
+class MySQLUtility(DatabaseUtility):
     """
-    A MySQL specific implementation of the DatabaseUtilityBase class.
+    A MySQL specific implementation of the Database class.
     """
 
+    # Constructor and connection methods
     def __init__(self, schema_name):
         super().__init__(schema_name)
 
@@ -80,6 +82,167 @@ class MySQLUtility(DatabaseUtilityBase):
         # Initialize the logger for logging purposes
         logging.info("MySQL utility created successfully.")
 
+    def connect(self, host, port, database, username, password):
+        """
+        Connect to the MySQL database.
+
+        Args:
+            host (str): Hostname or IP address of the database server.
+            port (int): Port number of the database server.
+            database (str): Name of the database.
+            username (str): Username for authentication.
+            password (str): Password for authentication.
+
+        Returns:
+            tuple: Database connection and cursor objects.
+
+        """
+        # Set the default port if not provided
+        if not port:
+            port = DatabaseUtility.DEFAULT_PORTS['mysql']
+
+        logging.info(f"Connecting to MySQL database '{database}' on host '{host}' and port '{port}'.")
+        self.connection = mysql.connector.connect(
+            host=host, port=port, database=database, user=username, password=password)
+        self.cursor = self.connection.cursor()
+        self.host = host
+        self.port = port
+        self.user = username
+        self.password = password
+        self.database = database
+
+    def dump_unread_results(self):
+        """
+        Dumps and logs any unread result sets in the cursor.
+
+        Returns:
+            None
+        """
+        try:
+            while True:
+                if not self.cursor.nextset():
+                    break
+                unread_result = self.cursor.fetchall()  # Fetch and store all remaining rows from the unread result set
+                for unread_row in unread_result:
+                    logging.warning("Unread result: %s", unread_row)  # Log each unread result row
+
+        except Exception as ex:
+            logging.error(f"An error occurred while processing remaining result sets: {ex}")
+
+    # Query execution methods
+    def execute_sql_statements(self, sql_statements):
+        """
+        Execute SQL statements using the provided database connection and cursor.
+
+        Args:
+            sql_statements (str): SQL statements to execute.
+
+        Returns:
+            str: The SQL statements executed.
+
+        """
+        # Execute the SQL statements
+        statements = sql_statements.split(';')
+        for statement in statements:
+            if statement.strip():
+                self.execute_query(statement)
+
+        # Commit the transaction
+        self.commit()
+
+        # Return the executed SQL statements
+        return sql_statements
+
+    # Query generation methods
+    def get_column_query(self):
+        """
+        Get the SQL query to retrieve column information from the database.
+
+        Returns:
+            str: The SQL query to retrieve column information.
+        """
+        return (
+            "SELECT column_name, data_type, character_maximum_length, is_nullable "
+            "FROM information_schema.columns WHERE table_name = %s"
+        )
+
+    def get_primary_keys_query(self, schema_name, table_name):
+        """
+        Get the primary keys of a table in MySQL.
+
+        Args:
+            schema_name (str): The name of the schema.
+            table_name (str): The name of the table.
+
+        Returns:
+            list: The list of primary key column names.
+        """
+        query = """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = %s
+                AND TABLE_NAME = %s
+                AND CONSTRAINT_NAME = 'PRIMARY'
+            ORDER BY ORDINAL_POSITION;
+        """
+        return query, (schema_name, table_name)
+
+    def get_foreign_key_query(self):
+        """
+        Get the SQL query to retrieve foreign key information from the database.
+
+        Returns:
+            str: The SQL query to retrieve foreign key information.
+        """
+        return ("""
+            SELECT
+              kcu.COLUMN_NAME,
+              kcu.REFERENCED_TABLE_NAME,
+              kcu.REFERENCED_COLUMN_NAME,
+              rc.CONSTRAINT_NAME,
+              rc.UPDATE_RULE,
+              rc.DELETE_RULE
+            FROM
+              INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+              INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc ON
+                kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+            WHERE
+              kcu.TABLE_SCHEMA = %s AND
+              kcu.TABLE_NAME = %s AND
+              kcu.REFERENCED_TABLE_NAME IS NOT NULL;
+        """)
+
+    def get_unique_constraints_query(self, schema_name, table_name):
+        """
+        Returns a list of unique constraints for the given table.
+
+        Args:
+            schema_name (str): Name of the schema.
+            table_name (str): Name of the table.
+
+        Returns:
+            list: List of unique constraints.
+        """
+        query = """
+            SELECT
+                column_name
+            FROM
+                information_schema.key_column_usage
+            WHERE
+                constraint_schema = %s
+                AND constraint_name IN (
+                    SELECT constraint_name
+                    FROM information_schema.table_constraints
+                    WHERE table_schema = %s
+                    AND table_name = %s
+                    AND constraint_type = 'UNIQUE'
+                )
+                AND table_schema = %s
+                AND table_name = %s
+        """
+        return query, (schema_name, schema_name, table_name, schema_name, table_name)
+
+    # DDL generation methods
     def map_data_type(self, dataframe_type):
         """
         Map pandas dataframe types to MySQL data types.

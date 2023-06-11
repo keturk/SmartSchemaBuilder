@@ -1,0 +1,361 @@
+{
+    "clients": {
+        "columns": [
+            {
+                "name": "client_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "address",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "phone",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "client_id"
+        ],
+        "foreign_keys": [],
+        "unique_columns": [
+            "name",
+            "phone"
+        ]
+    },
+    "data_items_in_tests": {
+        "columns": [
+            {
+                "name": "definition_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "item_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "definition_id",
+            "item_id"
+        ],
+        "foreign_keys": [
+            {
+                "column": "definition_id",
+                "referenced_table": "test_definitions",
+                "referenced_column": "definition_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            },
+            {
+                "column": "item_id",
+                "referenced_table": "test_data_items",
+                "referenced_column": "item_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            }
+        ],
+        "unique_columns": []
+    },
+    "payments": {
+        "columns": [
+            {
+                "name": "payment_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "administered_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "client_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "amount",
+                "type": "double precision",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "payment_date",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "payment_id"
+        ],
+        "foreign_keys": [
+            {
+                "column": "administered_id",
+                "referenced_table": "tests_administered",
+                "referenced_column": "administered_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            },
+            {
+                "column": "client_id",
+                "referenced_table": "clients",
+                "referenced_column": "client_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            }
+        ],
+        "unique_columns": []
+    },
+    "staff": {
+        "columns": [
+            {
+                "name": "staff_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "position",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "staff_id"
+        ],
+        "foreign_keys": [],
+        "unique_columns": [
+            "name"
+        ]
+    },
+    "test_data_items": {
+        "columns": [
+            {
+                "name": "item_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "description",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "item_id"
+        ],
+        "foreign_keys": [],
+        "unique_columns": [
+            "name"
+        ]
+    },
+    "test_definitions": {
+        "columns": [
+            {
+                "name": "definition_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "type_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "description",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "definition_id"
+        ],
+        "foreign_keys": [
+            {
+                "column": "type_id",
+                "referenced_table": "test_types",
+                "referenced_column": "type_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            }
+        ],
+        "unique_columns": [
+            "name"
+        ]
+    },
+    "test_results": {
+        "columns": [
+            {
+                "name": "result_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "administered_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "value",
+                "type": "double precision",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "notes",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "result_id"
+        ],
+        "foreign_keys": [
+            {
+                "column": "administered_id",
+                "referenced_table": "tests_administered",
+                "referenced_column": "administered_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            }
+        ],
+        "unique_columns": []
+    },
+    "test_types": {
+        "columns": [
+            {
+                "name": "type_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "name",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "description",
+                "type": "text",
+                "nullable": "YES",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "type_id"
+        ],
+        "foreign_keys": [],
+        "unique_columns": [
+            "name"
+        ]
+    },
+    "tests_administered": {
+        "columns": [
+            {
+                "name": "administered_id",
+                "type": "bigint",
+                "nullable": "NO",
+                "unique": false
+            },
+            {
+                "name": "definition_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "client_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "staff_id",
+                "type": "bigint",
+                "nullable": "YES",
+                "unique": false
+            },
+            {
+                "name": "date_administered",
+                "type": "text",
+                "nullable": "NO",
+                "unique": false
+            }
+        ],
+        "primary_keys": [
+            "administered_id"
+        ],
+        "foreign_keys": [
+            {
+                "column": "definition_id",
+                "referenced_table": "test_definitions",
+                "referenced_column": "definition_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            },
+            {
+                "column": "client_id",
+                "referenced_table": "clients",
+                "referenced_column": "client_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            },
+            {
+                "column": "staff_id",
+                "referenced_table": "staff",
+                "referenced_column": "staff_id",
+                "on_update_action": "NO ACTION",
+                "on_delete_action": "CASCADE"
+            }
+        ],
+        "unique_columns": []
+    }
+}
