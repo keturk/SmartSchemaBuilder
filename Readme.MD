@@ -24,6 +24,7 @@ In addition to generating SQL statements and exporting data to CSV files, Smart 
 - `common`: Contains utility functions and classes used throughout the project.
 - `db_utility`: Contains the database utility classes for different database types.
 - `docs`: Contains the documentation for the Smart Schema Builder tool.
+- `test_data`: Contains the sample data used for testing the Smart Schema Builder tool.
 - `export_to_csv.py`: Script to export tables from a database to CSV files.
 - `generate_sql_files.py`: Script to generate SQL files from CSV files.
 - `run_sql_files.py`: Script to execute SQL files against the database.
