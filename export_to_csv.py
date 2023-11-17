@@ -73,8 +73,7 @@ def export_table_to_csv(db, folder, schema, table_name, limit=None, exported_row
         writer = csv.writer(csvfile)
 
         # Fetch the records from the table
-        rows_query = db.get_select_query(f'{schema}.{table_name}', limit=limit)
-        rows = db.execute_query(rows_query)
+        rows = db.get_rows(f'{schema}.{table_name}', limit=limit)
 
         # Write the header row
         writer.writerow([column.column_name for column in table.columns])

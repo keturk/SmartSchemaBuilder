@@ -188,42 +188,6 @@ class DatabaseUtility:
         """
         return NotImplementedError("Subclasses must implement dump_unread_results() method")
 
-    # Query execution methods
-    def execute_query(self, query, parameters=None, fetch_all=True):
-        """
-        Executes the provided SQL query using the cursor.
-
-        Args:
-            query (str): The SQL query to execute.
-            parameters (tuple): Optional parameter values for the query (default: None).
-            fetch_all (bool): Flag indicating whether to fetch all rows (default: True).
-
-        Returns:
-            list or tuple: The result of the query. If fetch_all is True, returns a list of tuples representing
-                           the rows. If fetch_all is False, returns a single tuple representing the first row.
-                           If no rows are fetched, returns an empty list.
-
-        Raises:
-            Exception: If the connection or cursor is not established, or an error occurs during query execution.
-        """
-        try:
-            if self.cursor is None:
-                raise Exception("Cursor is not established. Call connect() method first.")
-
-            if parameters is not None:
-                self.cursor.execute(query, parameters)
-            else:
-                self.cursor.execute(query)
-
-            if fetch_all:
-                return self.cursor.fetchall()
-            else:
-                return self.cursor.fetchone() or []
-
-        except Exception as e:
-            logging.exception(f"Failed to execute query:\n{query}\n\nError: {e}")
-            raise
-
     def execute_sql_statements(self, sql_statements):
         """
         Execute SQL statements based on the database platform.
@@ -272,6 +236,56 @@ class DatabaseUtility:
             query += " LIMIT " + str(limit)
 
         return query
+
+    # Query execution methods
+    def execute_query(self, query, parameters=None, fetch_all=True):
+        """
+        Executes the provided SQL query using the cursor.
+
+        Args:
+            query (str): The SQL query to execute.
+            parameters (tuple): Optional parameter values for the query (default: None).
+            fetch_all (bool): Flag indicating whether to fetch all rows (default: True).
+
+        Returns:
+            list or tuple: The result of the query. If fetch_all is True, returns a list of tuples representing
+                           the rows. If fetch_all is False, returns a single tuple representing the first row.
+                           If no rows are fetched, returns an empty list.
+
+        Raises:
+            Exception: If the connection or cursor is not established, or an error occurs during query execution.
+        """
+        try:
+            if self.cursor is None:
+                raise Exception("Cursor is not established. Call connect() method first.")
+
+            if parameters is not None:
+                self.cursor.execute(query, parameters)
+            else:
+                self.cursor.execute(query)
+
+            if fetch_all:
+                return self.cursor.fetchall()
+            else:
+                return self.cursor.fetchone() or []
+
+        except Exception as e:
+            logging.exception(f"Failed to execute query:\n{query}\n\nError: {e}")
+            raise
+
+    def get_rows(self, table_name, limit=None):
+        """
+        Get all rows from a table.
+
+        Args:
+            table_name (str): The name of the table.
+            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+
+        Returns:
+            list[tuple]: The rows retrieved from the table.
+        """
+        query = self.get_select_query(table_name, limit=limit)
+        return self.execute_query(query)
 
     def get_column_query(self):
         """
