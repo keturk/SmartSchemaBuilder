@@ -16,7 +16,7 @@ Imagine you have a MySQL database named `mydb` and you need to migrate it to a P
    ```bash
    python generate_sql_files.py /path/to/csv_files --db-type postgresql 
    ```
-   Replace `/path/to/csv_files` with the path to the directory containing the exported CSV files. This step will generate SQL Data Definition Language (DDL) and INSERT statements based on the CSV files. If you have set up the OpenAI API key, the tool will suggest meaningful table names using the OpenAI API.
+   Replace `/path/to/csv_files` with the path to the directory containing the exported CSV files. This step will generate SQL Data Definition Language (DDL) and INSERT statements based on the CSV files. If you have set up an AI provider (Ollama or OpenAI), the tool will suggest meaningful table names using AI.
 
 3. Finally, execute the generated SQL files against the PostgreSQL database using the `run_sql_files.py` script:
    ```bash

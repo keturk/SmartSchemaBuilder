@@ -30,8 +30,46 @@ import click
 import getpass
 import logging
 from dotenv import load_dotenv
-from pattern.text import singularize
-from pattern.text import pluralize
+# Use NLTK for text processing instead of deprecated Pattern library
+try:
+    import nltk
+    from nltk.stem import WordNetLemmatizer
+    from nltk.corpus import wordnet
+    
+    # Download required NLTK data
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet', quiet=True)
+    
+    lemmatizer = WordNetLemmatizer()
+    
+    def singularize(word):
+        """Convert word to singular form using NLTK."""
+        return lemmatizer.lemmatize(word, pos=wordnet.NOUN)
+    
+    def pluralize(word):
+        """Convert word to plural form - basic implementation."""
+        if word.endswith(('s', 'sh', 'ch', 'x', 'z')):
+            return word + 'es'
+        elif word.endswith('y') and len(word) > 1 and word[-2] not in 'aeiou':
+            return word[:-1] + 'ies'
+        else:
+            return word + 's'
+            
+except ImportError:
+    # Fallback implementations if NLTK is not available
+    def singularize(word):
+        """Basic singularization fallback."""
+        if word.endswith('s') and len(word) > 1:
+            return word[:-1]
+        return word
+    
+    def pluralize(word):
+        """Basic pluralization fallback."""
+        if not word.endswith('s'):
+            return word + 's'
+        return word
 import hashlib
 
 # Load environment variables from .env file

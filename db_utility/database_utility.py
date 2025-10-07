@@ -26,9 +26,21 @@ SOFTWARE.
 import os
 import logging
 import pandas
-
+from typing import Optional, List, Dict, Any, Union, Tuple
 from queue import Queue
+from pathlib import Path
+
 from db_utility.database_table import DatabaseTable
+from common.exceptions import (
+    DatabaseConnectionError, 
+    DatabaseQueryError, 
+    DatabaseSchemaError,
+    ConfigurationError,
+    ValidationError,
+    FatalError
+)
+from common.error_handler import handle_errors, retry_on_failure, safe_execute
+from common.validators import InputValidator
 
 
 class DatabaseUtility:
@@ -50,134 +62,228 @@ class DatabaseUtility:
     }
 
     # Constructor and connection methods
-    def __init__(self, schema_name):
-        self.schema_name = self.format_identifier(schema_name)
-        self.schema_prefix = f"{self.schema_name}." if self.schema_name is not None else ""
-        self.connection = None
-        self.cursor = None
-        self.host = None
-        self.port = None
-        self.user = None
-        self.password = None
-        self.database = None
+    def __init__(self, schema_name: str):
+        """Initialize the database utility.
+        
+        Args:
+            schema_name: Name of the database schema
+        """
+        try:
+            # Validate schema name
+            if schema_name and not InputValidator.non_empty_string(schema_name):
+                raise ValidationError("Schema name must be a non-empty string")
+            
+            self.schema_name = self.format_identifier(schema_name) if schema_name else None
+            self.schema_prefix = f"{self.schema_name}." if self.schema_name is not None else ""
+            self.connection = None
+            self.cursor = None
+            self.host = None
+            self.port = None
+            self.user = None
+            self.password = None
+            self.database = None
+            
+            logging.info(f"Database utility initialized for schema: {self.schema_name}")
+            
+        except Exception as e:
+            logging.error(f"Failed to initialize database utility: {e}")
+            raise ConfigurationError(f"Database utility initialization failed: {e}")
 
     @staticmethod
-    def create(db_type: str, schema_name: str = ''):
+    @handle_errors
+    def create(db_type: str, schema_name: str = '') -> Optional['DatabaseUtility']:
         """
         Factory method to create an instance of database utility based on the provided database type.
 
         Args:
-            db_type (str): Type of database. Options are 'postgresql', 'mysql', 'sqlserver'.
-            schema_name (str): Name of the schema.
+            db_type: Type of database. Options are 'postgresql', 'mysql', 'sqlserver'.
+            schema_name: Name of the schema.
 
         Returns:
             Instance of respective database utility or None if invalid db_type is provided.
 
         Raises:
-            Exception: If an error occurs while creating the database utility.
+            ValidationError: If invalid database type is provided.
+            ConfigurationError: If database utility creation fails.
         """
-        db_type = db_type.lower()
-        if db_type == 'postgresql':
-            # Importing here to avoid circular import
-            from db_utility.postgresql_utility import PostgreSQLUtility
-            return PostgreSQLUtility(schema_name)
-        elif db_type == 'mysql':
-            # Importing here to avoid circular import
-            from db_utility.mysql_utility import MySQLUtility
-            return MySQLUtility(schema_name)
-        elif db_type == 'sqlserver':
-            # Importing here to avoid circular import
-            from db_utility.sqlserver_utility import SQLServerUtility
-            return SQLServerUtility(schema_name)
-        else:
-            logging.error("Error: Invalid target database selected.")
-            return None
+        try:
+            # Validate inputs
+            if not InputValidator.non_empty_string(db_type):
+                raise ValidationError("Database type must be a non-empty string")
+            
+            if not InputValidator.database_type(db_type):
+                raise ValidationError(f"Unsupported database type: {db_type}. Supported types: {DatabaseUtility.SUPPORTED_DATABASES}")
+            
+            db_type = db_type.lower()
+            logging.info(f"Creating database utility for type: {db_type}, schema: {schema_name}")
+            
+            if db_type == 'postgresql':
+                from db_utility.postgresql_utility import PostgreSQLUtility
+                return PostgreSQLUtility(schema_name)
+            elif db_type == 'mysql':
+                from db_utility.mysql_utility import MySQLUtility
+                return MySQLUtility(schema_name)
+            elif db_type == 'sqlserver':
+                from db_utility.sqlserver_utility import SQLServerUtility
+                return SQLServerUtility(schema_name)
+            else:
+                raise ValidationError(f"Invalid database type: {db_type}")
+                
+        except ImportError as e:
+            logging.error(f"Failed to import database utility for {db_type}: {e}")
+            raise ConfigurationError(f"Database utility import failed for {db_type}: {e}")
+        except Exception as e:
+            logging.error(f"Failed to create database utility: {e}")
+            raise ConfigurationError(f"Database utility creation failed: {e}")
 
-    def connect(self, host, port, database, username, password):
+    @handle_errors
+    def connect(self, host: str, port: int, database: str, username: str, password: str) -> Tuple[Any, Any]:
         """
         Connects to the specified database.
 
         Args:
-            host (str): Host of the database.
-            port (int): Port number of the database.
-            database (str): Database name.
-            username (str): Username for authentication.
-            password (str): Password for authentication.
+            host: Host of the database.
+            port: Port number of the database.
+            database: Database name.
+            username: Username for authentication.
+            password: Password for authentication.
 
         Returns:
-            Connection object: The connection to the database.
+            Tuple of (connection, cursor) objects.
 
         Raises:
-            ValueError: If an invalid database type is provided.
-            Exception: If an error occurs while connecting to the database.
+            ValidationError: If invalid connection parameters are provided.
+            DatabaseConnectionError: If connection fails.
         """
-        return NotImplementedError("Subclasses must implement connect() method")
+        try:
+            # Validate connection parameters
+            if not InputValidator.non_empty_string(host):
+                raise ValidationError("Host must be a non-empty string")
+            
+            if not InputValidator.port_number(port):
+                raise ValidationError(f"Port must be a valid port number (1-65535), got: {port}")
+            
+            if not InputValidator.non_empty_string(database):
+                raise ValidationError("Database name must be a non-empty string")
+            
+            if not InputValidator.non_empty_string(username):
+                raise ValidationError("Username must be a non-empty string")
+            
+            # Store connection parameters
+            self.host = host
+            self.port = port
+            self.database = database
+            self.user = username
+            self.password = password
+            
+            logging.info(f"Attempting to connect to {self.get_database_type()} database: {host}:{port}/{database}")
+            
+            # This method should be implemented by subclasses
+            raise NotImplementedError("Subclasses must implement connect() method")
+            
+        except ValidationError:
+            raise
+        except Exception as e:
+            logging.error(f"Database connection failed: {e}")
+            raise DatabaseConnectionError(
+                f"Failed to connect to database: {e}",
+                host=host,
+                port=port,
+                database=database
+            )
 
-    def commit(self):
+    @handle_errors
+    def commit(self) -> None:
         """
         Commits the current transaction.
 
-        Returns:
-            None
-
         Raises:
-            Exception: If the connection is not established or an error occurs during the commit.
+            DatabaseConnectionError: If the connection is not established.
+            DatabaseQueryError: If an error occurs during the commit.
         """
         try:
             if self.connection is None:
-                raise Exception("Connection is not established. Call connect() method first.")
+                raise DatabaseConnectionError("Connection is not established. Call connect() method first.")
 
             self.connection.commit()
+            logging.debug("Transaction committed successfully")
 
+        except DatabaseConnectionError:
+            raise
         except Exception as e:
-            logging.exception(f"An error occurred while committing the transaction: {e}")
+            logging.error(f"Failed to commit transaction: {e}")
+            raise DatabaseQueryError(f"Transaction commit failed: {e}")
 
-    def rollback(self):
+    @handle_errors
+    def rollback(self) -> None:
         """
         Rolls back the current transaction.
 
-        Returns:
-            None
-
         Raises:
-            Exception: If the connection is not established or an error occurs during the rollback.
+            DatabaseConnectionError: If the connection is not established.
+            DatabaseQueryError: If an error occurs during the rollback.
         """
         try:
             if self.connection is None:
-                raise Exception("Connection is not established. Call connect() method first.")
+                raise DatabaseConnectionError("Connection is not established. Call connect() method first.")
 
             self.connection.rollback()
+            logging.debug("Transaction rolled back successfully")
 
+        except DatabaseConnectionError:
+            raise
         except Exception as e:
-            logging.exception(f"An error occurred while rolling back the transaction: {e}")
+            logging.error(f"Failed to rollback transaction: {e}")
+            raise DatabaseQueryError(f"Transaction rollback failed: {e}")
 
-    def close(self):
+    @handle_errors
+    def close(self) -> None:
         """
         Closes the cursor and connection to the database.
 
-        Returns:
-            None
-
         Raises:
-            Exception: If the connection or cursor is not established.
+            DatabaseConnectionError: If the connection or cursor is not established.
         """
         try:
-            if self.cursor is None:
-                raise Exception("Cursor is not established. Call connect() method first.")
-            if self.connection is None:
-                raise Exception("Connection is not established. Call connect() method first.")
+            if self.cursor is None and self.connection is None:
+                logging.warning("No active connection to close")
+                return
 
+            if self.cursor is None:
+                raise DatabaseConnectionError("Cursor is not established. Call connect() method first.")
+            if self.connection is None:
+                raise DatabaseConnectionError("Connection is not established. Call connect() method first.")
+
+            # Dump any unread results before closing
             self.dump_unread_results()
 
+            # Close cursor and connection
             self.cursor.close()
             self.connection.close()
 
-            # Set the cursor and connection variables to None after closing
+            # Reset connection variables
             self.cursor = None
             self.connection = None
+            
+            logging.info("Database connection closed successfully")
 
+        except DatabaseConnectionError:
+            raise
         except Exception as e:
-            logging.exception(f"An error occurred while closing the connection: {e}")
+            logging.error(f"Failed to close database connection: {e}")
+            raise DatabaseConnectionError(f"Connection close failed: {e}")
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with automatic cleanup."""
+        try:
+            self.close()
+        except Exception as e:
+            logging.error(f"Error during context manager cleanup: {e}")
+        return False  # Don't suppress exceptions
 
     def dump_unread_results(self):
         """
@@ -238,54 +344,95 @@ class DatabaseUtility:
         return query
 
     # Query execution methods
-    def execute_query(self, query, parameters=None, fetch_all=True):
+    @handle_errors
+    @retry_on_failure(max_retries=3)
+    def execute_query(self, query: str, parameters: Optional[Tuple] = None, fetch_all: bool = True) -> Union[List[Tuple], Tuple, List]:
         """
         Executes the provided SQL query using the cursor.
 
         Args:
-            query (str): The SQL query to execute.
-            parameters (tuple): Optional parameter values for the query (default: None).
-            fetch_all (bool): Flag indicating whether to fetch all rows (default: True).
+            query: The SQL query to execute.
+            parameters: Optional parameter values for the query.
+            fetch_all: Flag indicating whether to fetch all rows (default: True).
 
         Returns:
-            list or tuple: The result of the query. If fetch_all is True, returns a list of tuples representing
-                           the rows. If fetch_all is False, returns a single tuple representing the first row.
-                           If no rows are fetched, returns an empty list.
+            The result of the query. If fetch_all is True, returns a list of tuples representing
+            the rows. If fetch_all is False, returns a single tuple representing the first row.
+            If no rows are fetched, returns an empty list.
 
         Raises:
-            Exception: If the connection or cursor is not established, or an error occurs during query execution.
+            DatabaseConnectionError: If the connection or cursor is not established.
+            DatabaseQueryError: If an error occurs during query execution.
+            ValidationError: If the query is invalid.
         """
         try:
+            # Validate inputs
+            if not InputValidator.non_empty_string(query):
+                raise ValidationError("Query must be a non-empty string")
+            
             if self.cursor is None:
-                raise Exception("Cursor is not established. Call connect() method first.")
+                raise DatabaseConnectionError("Cursor is not established. Call connect() method first.")
 
+            logging.debug(f"Executing query: {query[:100]}{'...' if len(query) > 100 else ''}")
+            
+            # Execute query with or without parameters
             if parameters is not None:
                 self.cursor.execute(query, parameters)
             else:
                 self.cursor.execute(query)
 
+            # Fetch results based on fetch_all flag
             if fetch_all:
-                return self.cursor.fetchall()
+                result = self.cursor.fetchall()
+                logging.debug(f"Query returned {len(result)} rows")
+                return result
             else:
-                return self.cursor.fetchone() or []
+                result = self.cursor.fetchone()
+                return result if result is not None else []
 
-        except Exception as e:
-            logging.exception(f"Failed to execute query:\n{query}\n\nError: {e}")
+        except DatabaseConnectionError:
             raise
+        except ValidationError:
+            raise
+        except Exception as e:
+            logging.error(f"Query execution failed: {e}")
+            raise DatabaseQueryError(
+                f"Failed to execute query: {e}",
+                query=query
+            )
 
-    def get_rows(self, table_name, limit=None):
+    @handle_errors
+    def get_rows(self, table_name: str, limit: Optional[int] = None) -> List[Tuple]:
         """
         Get all rows from a table.
 
         Args:
-            table_name (str): The name of the table.
-            limit (int, optional): The maximum number of rows to retrieve. Defaults to None.
+            table_name: The name of the table.
+            limit: The maximum number of rows to retrieve.
 
         Returns:
-            list[tuple]: The rows retrieved from the table.
+            The rows retrieved from the table.
+
+        Raises:
+            ValidationError: If table_name is invalid.
+            DatabaseQueryError: If query execution fails.
         """
-        query = self.get_select_query(table_name, limit=limit)
-        return self.execute_query(query)
+        try:
+            # Validate inputs
+            if not InputValidator.non_empty_string(table_name):
+                raise ValidationError("Table name must be a non-empty string")
+            
+            if limit is not None and not InputValidator.positive_integer(limit):
+                raise ValidationError(f"Limit must be a positive integer, got: {limit}")
+            
+            query = self.get_select_query(table_name, limit=limit)
+            return self.execute_query(query)
+            
+        except ValidationError:
+            raise
+        except Exception as e:
+            logging.error(f"Failed to get rows from table {table_name}: {e}")
+            raise DatabaseQueryError(f"Failed to retrieve rows from table {table_name}: {e}")
 
     def get_column_query(self):
         """
@@ -549,104 +696,182 @@ class DatabaseUtility:
 
         return ordered_tables
 
-    def generate_ddl(self, folder, database_tables):
+    @handle_errors
+    def generate_ddl(self, folder: Union[str, Path], database_tables: Dict[str, DatabaseTable]) -> str:
         """
         Generates a DDL script for the given database tables.
 
         Args:
-            folder (str): The output directory for the DDL script.
-            database_tables (dict): The database tables to generate the DDL script for.
+            folder: The output directory for the DDL script.
+            database_tables: The database tables to generate the DDL script for.
+
+        Returns:
+            The path to the generated DDL file.
 
         Raises:
-            Exception: If an error occurs while generating the DDL script.
+            ValidationError: If inputs are invalid.
+            DatabaseSchemaError: If DDL generation fails.
+            FileProcessingError: If file operations fail.
         """
         try:
+            # Validate inputs
+            if not InputValidator.directory_path(folder):
+                raise ValidationError(f"Invalid output directory: {folder}")
+            
+            if not database_tables:
+                raise ValidationError("No database tables provided for DDL generation")
+            
+            # Convert to Path object for better handling
+            folder_path = Path(folder)
+            
+            logging.info(f"Generating DDL for {len(database_tables)} tables")
+            
             # Generate the order of table creation based on foreign key dependencies
             ordered_tables = self.generate_table_order(database_tables)
+            logging.debug(f"Table creation order: {ordered_tables}")
 
+            # Start building DDL
             ddl = self.generate_create_schema()
+            
             for table_name in ordered_tables:
                 database_table = DatabaseTable.get_table_by_name(database_tables, table_name)
+                if database_table is None:
+                    logging.warning(f"Table {table_name} not found in database_tables")
+                    continue
+                
                 formatted_table_name = self.format_identifier(database_table.table_name)
+                logging.debug(f"Processing table: {formatted_table_name}")
 
+                # Build table DDL
                 ddl += self.create_table_begin(formatted_table_name)
 
+                # Add columns
                 for column in database_table.columns:
                     ddl += self.generate_table_column(column)
 
+                # Add primary keys
                 if database_table.has_primary_key():
-                    formatted_primary_keys = \
-                        [self.format_identifier(primary_key) for primary_key in database_table.primary_keys]
+                    formatted_primary_keys = [
+                        self.format_identifier(primary_key) 
+                        for primary_key in database_table.primary_keys
+                    ]
                     ddl += self.create_primary_keys(formatted_table_name, ','.join(formatted_primary_keys))
 
+                # Add foreign keys
                 if database_table.has_foreign_keys():
                     foreign_keys = database_table.foreign_keys
                     ddl += self.create_foreign_keys(formatted_table_name, foreign_keys)
 
+                # Add unique indexes
                 if database_table.has_unique_indexes():
                     for index_columns in database_table.unique_indexes:
                         ddl += self.generate_unique_index(formatted_table_name, index_columns)
 
+                # Clean up trailing comma and add table end
                 ddl = ddl.rstrip(",\n")
                 ddl += self.create_table_end()
                 ddl += "\n\n"
 
             logging.info("DDL generation complete.")
 
-            # Create the output directory if it doesn't exist
-            os.makedirs(folder, exist_ok=True)
-            os.makedirs(os.path.join(folder, self.get_database_type()), exist_ok=True)
+            # Create the output directory structure
+            output_dir = folder_path / self.get_database_type()
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-            # Write the DDL to a file under the provided folder
-            ddl_file_path = os.path.join(folder, self.get_database_type(), f"ddl_{self.get_database_type()}.sql")
-            with open(ddl_file_path, 'w') as ddl_file:
+            # Write the DDL to a file
+            ddl_file_path = output_dir / f"ddl_{self.get_database_type()}.sql"
+            
+            with open(ddl_file_path, 'w', encoding='utf-8') as ddl_file:
                 ddl_file.write(ddl)
 
-            logging.info(f"DDL is generated and written to: {ddl_file_path}")
+            logging.info(f"DDL generated and written to: {ddl_file_path}")
+            return str(ddl_file_path)
 
+        except ValidationError:
+            raise
         except Exception as e:
-            logging.exception(f"Error generating DDL script: {str(e)}")
+            logging.error(f"DDL generation failed: {e}")
+            raise DatabaseSchemaError(f"Failed to generate DDL: {e}")
 
     # Data insertion methods
-    def generate_insert_statements(self, folder, database_tables):
+    @handle_errors
+    def generate_insert_statements(self, folder: Union[str, Path], database_tables: Dict[str, DatabaseTable]) -> List[str]:
         """
         Generates SQL insert statements for the given database tables.
 
         Args:
-            folder (str): The output directory for the SQL insert statements.
-            database_tables (dict): The database tables to generate the SQL insert statements for.
+            folder: The output directory for the SQL insert statements.
+            database_tables: The database tables to generate the SQL insert statements for.
+
+        Returns:
+            List of paths to generated insert statement files.
 
         Raises:
-            Exception: If an error occurs while generating the insert statements.
+            ValidationError: If inputs are invalid.
+            DatabaseSchemaError: If insert statement generation fails.
+            FileProcessingError: If file operations fail.
         """
         try:
+            # Validate inputs
+            if not InputValidator.directory_path(folder):
+                raise ValidationError(f"Invalid output directory: {folder}")
+            
+            if not database_tables:
+                raise ValidationError("No database tables provided for insert statement generation")
+            
+            # Convert to Path object for better handling
+            folder_path = Path(folder)
+            output_dir = folder_path / self.get_database_type()
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            generated_files = []
+            
             for database_table in database_tables.values():
                 formatted_table_name = self.format_identifier(database_table.table_name)
                 logging.info(f"Processing table: {formatted_table_name}")
+                
+                if database_table.dataframe is None or database_table.dataframe.empty:
+                    logging.warning(f"Table {formatted_table_name} has no data to insert")
+                    continue
+                
                 dataframe = database_table.dataframe
-
                 columns = dataframe.columns.tolist()
+                
+                # Generate insert statements
+                insert_values = []
+                for index, row in dataframe.iterrows():
+                    values = []
+                    for col in columns:
+                        value = row[col]
+                        if pandas.isna(value) or value is pandas.NA:
+                            values.append("NULL")
+                        else:
+                            # Escape single quotes in string values
+                            str_value = str(value).replace("'", "''")
+                            values.append(f"'{str_value}'")
+                    
+                    insert_values.append(f"({', '.join(values)})")
 
-                with open(os.path.join(folder, self.get_database_type(),
-                                       f"insert_{formatted_table_name}.sql"), "w", encoding='utf-8') as f:
-                    insert_values = []
+                # Create insert statement
+                insert_statement = "INSERT INTO {} ({}) VALUES\n{};\n".format(
+                    f'{self.schema_prefix}{formatted_table_name}',
+                    ', '.join(columns),
+                    ',\n'.join(insert_values)
+                )
 
-                    for index, row in dataframe.iterrows():
-                        values = [str(row[col]) if row[col] is not pandas.NA else "NULL" for col in columns]
-                        formatted_values = [f"'{value}'" if value != "NULL" else "NULL" for value in values]
-
-                        insert_values.append(f"({', '.join(formatted_values)})")
-
-                    insert_statement = "INSERT INTO {} ({}) VALUES\n{};\n".format(
-                        f'{self.schema_prefix}{formatted_table_name}',
-                        ', '.join(columns),
-                        ',\n'.join(insert_values)
-                    )
-
+                # Write to file
+                insert_file_path = output_dir / f"insert_{formatted_table_name}.sql"
+                with open(insert_file_path, 'w', encoding='utf-8') as f:
                     f.write(insert_statement)
-                    logging.info(f"Generated insert statements for table: {formatted_table_name}")
+                
+                generated_files.append(str(insert_file_path))
+                logging.info(f"Generated insert statements for table: {formatted_table_name} ({len(insert_values)} rows)")
 
-            logging.info("Finished generating insert statements.")
+            logging.info(f"Finished generating insert statements for {len(generated_files)} tables")
+            return generated_files
 
+        except ValidationError:
+            raise
         except Exception as e:
-            logging.exception(f"Error generating insert statements: {str(e)}")
+            logging.error(f"Insert statement generation failed: {e}")
+            raise DatabaseSchemaError(f"Failed to generate insert statements: {e}")

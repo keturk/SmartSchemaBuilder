@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-schema-builder"
+version = "2.0.0"
+description = "A Python-based toolset for generating SQL DDL and INSERT statements from CSV files"
+readme = "Readme.MD"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Kamil Ercan Turkarslan", email = "keturk@example.com"}
+]
+keywords = ["database", "schema", "migration", "sql", "csv"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+    "click>=8.1.7",
+    "pandas>=2.2.0",
+    "python-dotenv>=1.0.0",
+    "sqlparse>=0.4.4",
+    "SQLAlchemy>=2.0.25",
+    "psycopg2-binary>=2.9.9",
+    "mysql-connector-python>=8.2.0",
+    "pyodbc>=5.0.1",
+    "PyMySQL>=1.1.0",
+    "openai>=1.12.0",
+    "nltk>=3.8.1",
+    "pydantic>=2.5.0",
+    "rich>=13.7.0",
+    "typer>=0.9.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "safety>=2.3.0",
+    "bandit>=1.7.0",
+]
+
+[project.scripts]
+smart-schema-builder = "smart_schema_builder.cli:main"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--cov=smart_schema_builder --cov-report=html --cov-report=term-missing"

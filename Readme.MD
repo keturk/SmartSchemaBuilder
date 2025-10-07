@@ -10,13 +10,15 @@ In addition to generating SQL statements and exporting data to CSV files, Smart 
 
 - Automatic generation of SQL DDL statements to create database tables based on the structure of CSV files.
 - Automatic generation of SQL INSERT statements to populate the created tables with data from the CSV files.
-- (Optional) Intelligent suggestion of meaningful table names using the OpenAI API, enhancing the usability and clarity of the generated SQL statements.
+- (Optional) Intelligent suggestion of meaningful table names using AI providers (OpenAI API or local Ollama), enhancing the usability and clarity of the generated SQL statements.
 - Support for multiple databases (PostgreSQL, MySQL, and SQL Server), allowing the generated SQL statements to be compatible with different database systems.
 - Ability to execute generated SQL files against a target database, automating the creation of tables and inserting data from the CSV files.
 - Capability to export tables from a database to CSV files, facilitating tasks such as data backup, sharing data with external systems, and data analysis outside the database environment.
 - Customizable and extensible architecture that allows for the addition of support for additional database types.
 - Integration with existing workflows, simplifying the process of schema creation, data population, and data export from CSV files.
 - Error handling and logging, providing visibility into the execution process and aiding in troubleshooting.
+- **Local AI Support**: Use Ollama for free, local AI processing without API costs.
+- **Automatic AI Provider Selection**: Automatically detects and uses the best available AI provider.
 - Open-source nature, inviting contributions from the community to enhance and extend the functionality of the Smart Schema Builder tool.
 
 ## Directory Structure

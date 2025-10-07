@@ -29,6 +29,13 @@ import click
 import pandas as pd
 import common.library as common_library
 import common.openai_utility as openai
+from common.ai_provider import generate_table_names
+from common.exceptions import (
+    FileProcessingError, CSVProcessingError, SQLGenerationError, 
+    ValidationError, ConfigurationError, FatalError
+)
+from common.error_handler import handle_errors, safe_execute, error_handler
+from common.validators import InputValidator
 import logging
 
 import json
@@ -40,48 +47,54 @@ from db_utility.database_foreign_key import DatabaseForeignKey
 common_library.configure_logging('generate_sql_files.log', logging.INFO)
 
 
+@handle_errors(fallback_value=None, context="table_name_generation")
 def get_table_names(database_tables, folder):
     """
-    Function to get table names for database tables using OpenAI API.
+    Function to get table names for database tables using AI provider.
 
     :param database_tables: A dictionary containing database tables with CSV filenames as keys and DatabaseTable
     objects as values.
     :param folder: The folder where CSV files are located. This is used in the prompt for the
-    OpenAI API.
+    AI provider.
     :return: None. Updates the table names in the database_tables dictionary in-place.
     """
+    if not database_tables:
+        logging.warning("No database tables provided for name generation")
+        return
+
+    # Validate inputs
+    try:
+        InputValidator.validate_directory_path(folder, must_exist=True)
+    except ValidationError as e:
+        raise FileProcessingError(f"Invalid folder path: {e}", file_path=folder) from e
 
     # Getting CSV filenames from the loaded data tables
     csv_filenames = [db_table.csv_filename for db_table in database_tables.values()]
 
-    # Constructing a query for the OpenAI API
-    prompt = f"""
-    Please suggest meaningful table names for the following CSV files without adding unnecessary repetitive 
-    postfixes and prefixes:
+    try:
+        # Use the new AI provider system
+        suggested_names = generate_table_names(csv_filenames, folder)
 
-    {", ".join(csv_filenames)}
-
-    These files are located in the {folder} folder. Please provide your suggestions in a structured manner, 
-    with one suggestion per line.    
-    
-    Your suggestions are highly appreciated.
-    
-    If suggestions are multiple words, please use underscores to separate the words.
-    """
-
-    # Make a call to the OpenAI API for table name suggestions
-    response = openai.ask_openai(prompt)
-
-    # Extract the suggested names from the API response
-    suggestions = response.choices[0]['text']
-    suggested_names = re.split(r'[,\n]', suggestions)
-    suggested_names = [name.strip() for name in suggested_names if name.strip()]
-
-    # Assign the suggested names to the corresponding tables
-    for csv_file, suggested_name in zip(csv_filenames, suggested_names):
-        database_tables[csv_file].update_table_name(suggested_name)
+        # Assign the suggested names to the corresponding tables
+        for csv_file, suggested_name in zip(csv_filenames, suggested_names):
+            try:
+                # Validate table name
+                validated_name = InputValidator.validate_table_name(suggested_name)
+                database_tables[csv_file].update_table_name(validated_name)
+            except ValidationError as e:
+                logging.warning(f"Invalid table name '{suggested_name}' for {csv_file}: {e}")
+                # Use fallback naming
+                fallback_name = os.path.splitext(csv_file)[0].lower()
+                database_tables[csv_file].update_table_name(fallback_name)
+    except Exception as e:
+        logging.error(f"Failed to generate table names: {e}")
+        # Fallback to simple naming
+        for csv_file in csv_filenames:
+            fallback_name = os.path.splitext(csv_file)[0].lower()
+            database_tables[csv_file].update_table_name(fallback_name)
 
 
+@handle_errors(fallback_value={}, context="csv_loading")
 def load_csv_files(folder, csv_filenames, db):
     """
     Function to load CSV files from a given folder into pandas dataframes.
@@ -91,26 +104,66 @@ def load_csv_files(folder, csv_filenames, db):
     :param db: A Database object.
     :return: A dictionary containing database tables with CSV filenames as keys and DatabaseTable objects as values.
     """
+    if not csv_filenames:
+        logging.warning("No CSV filenames provided")
+        return {}
+
+    # Validate inputs
+    try:
+        InputValidator.validate_directory_path(folder, must_exist=True)
+    except ValidationError as e:
+        raise FileProcessingError(f"Invalid folder path: {e}", file_path=folder) from e
 
     logging.info("Loading CSV files into memory...")
 
     database_tables = {}
+    failed_files = []
+    
     for csv_filename in csv_filenames:
         try:
+            # Validate CSV file
             full_filename = os.path.join(folder, csv_filename)
+            InputValidator.validate_csv_file(full_filename)
+            
             table_name = os.path.splitext(os.path.basename(csv_filename))[0]
             csv_delimiter = common_library.get_csv_delimiter(full_filename)
-            dataframe = pd.read_csv(full_filename, delimiter=csv_delimiter, na_values=['NULL', '', 'NaN'],
-                                    keep_default_na=False, skipinitialspace=True)
+            
+            dataframe = pd.read_csv(
+                full_filename, 
+                delimiter=csv_delimiter, 
+                na_values=['NULL', '', 'NaN'],
+                keep_default_na=False, 
+                skipinitialspace=True
+            )
+            
+            if dataframe.empty:
+                logging.warning(f"Empty CSV file: {csv_filename}")
+                continue
+                
             dataframe = dataframe.convert_dtypes()
             database_tables[csv_filename] = DatabaseTable.from_dataframe(
                 db, dataframe, csv_filename, table_name)
             logging.info(f"Successfully loaded CSV file: {csv_filename}")
+            
         except pd.errors.EmptyDataError:
             logging.warning(f"Empty CSV file: {csv_filename}")
-        except pd.errors.ParserError:
-            logging.error(f"Error loading CSV file: {csv_filename}")
+            failed_files.append(csv_filename)
+        except pd.errors.ParserError as e:
+            logging.error(f"Error parsing CSV file {csv_filename}: {e}")
+            failed_files.append(csv_filename)
+        except ValidationError as e:
+            logging.error(f"Invalid CSV file {csv_filename}: {e}")
+            failed_files.append(csv_filename)
+        except Exception as e:
+            logging.error(f"Unexpected error loading CSV file {csv_filename}: {e}")
+            failed_files.append(csv_filename)
 
+    if failed_files:
+        logging.warning(f"Failed to load {len(failed_files)} CSV files: {failed_files}")
+    
+    if not database_tables:
+        raise CSVProcessingError("No CSV files could be loaded successfully", csv_file="all")
+    
     logging.info(f"Successfully loaded {len(database_tables)} CSV files.")
     return database_tables
 
@@ -349,6 +402,7 @@ def load_schema_from_json(folder, schema, database_tables):
 @click.option('--folder', prompt='Enter the directory path containing the SQL files')
 @click.option('--db-type', type=common_library.CaseInsensitiveChoice(DatabaseUtility.SUPPORTED_DATABASES), prompt=True)
 @click.option('--schema', default=None, prompt='Enter the database schema name (optional)')
+@handle_errors(fallback_value=None, context="sql_generation", reraise=True)
 def generate_sql_files(folder: str, db_type: str, schema: str):
     """
     Main function (entry point) of the application. Generates SQL files based on CSV files in the provided folder.
@@ -358,52 +412,119 @@ def generate_sql_files(folder: str, db_type: str, schema: str):
     :param schema: Name of the database schema (optional).
     :return: None. Creates DDL and insert statement files in the specified folder.
     """
+    try:
+        # Validate inputs
+        folder = os.path.abspath(folder)
+        InputValidator.validate_directory_path(folder, must_exist=True)
+        db_type = InputValidator.validate_database_type(db_type)
+        
+        if schema:
+            schema = InputValidator.validate_table_name(schema)
 
-    use_openai = False
-    if openai.openai_api_key != 'NOT_DEFINED':
-        use_openai = True
+        logging.info(f"Folder: {folder}")
+        logging.info(f"Target Database: {db_type}")
+        if schema:
+            logging.info(f"Schema: {schema}")
 
-    logging.info(f"Folder: {folder}")
-    logging.info(f"Target Database: {db_type}")
+        # Create a database instance for the specified database type
+        db = DatabaseUtility.create(db_type, schema)
+        if not db:
+            raise ConfigurationError(f"Failed to create database utility for type: {db_type}")
 
-    folder = os.path.abspath(folder)
-    # Check if the specified folder exists
-    if not os.path.exists(folder):
-        logging.error("Error: The specified folder does not exist.")
-        return
+        # Get names of CSV files in folder
+        csv_filenames = common_library.get_csv_filenames(folder)
+        if not csv_filenames:
+            raise FileProcessingError("No CSV files found in the specified folder", file_path=folder)
 
-    # Create a database instance for the specified database type
-    db = DatabaseUtility.create(db_type, schema)
+        # Load CSV files into Pandas dataframes
+        database_tables = load_csv_files(folder, csv_filenames, db)
+        if not database_tables:
+            raise CSVProcessingError("No CSV files could be loaded successfully", csv_file="all")
 
-    # get names of CSV files in folder
-    csv_filenames = common_library.get_csv_filenames(folder)
+        # Check if AI provider is available
+        from common.ai_provider import get_ai_provider
+        ai_provider = get_ai_provider()
+        use_ai = ai_provider is not None
 
-    # Load CSV files into Pandas dataframes
-    database_tables = load_csv_files(folder, csv_filenames, db)
+        # Try to load existing schema
+        schema_found = safe_execute(
+            load_schema_from_json, 
+            folder, schema, database_tables,
+            fallback_value=False,
+            context="schema_loading"
+        )
 
-    schema_found = load_schema_from_json(folder, schema, database_tables)
+        if not schema_found:
+            if use_ai:
+                # Generate meaningful names for the files using AI provider
+                safe_execute(
+                    get_table_names,
+                    database_tables, folder,
+                    fallback_value=None,
+                    context="table_name_generation"
+                )
 
-    if not schema_found:
-        if use_openai:
-            # Generate meaningful names for the files using OpenAI API
-            get_table_names(database_tables, folder)
+            # Find primary keys in the tables
+            safe_execute(
+                find_primary_keys,
+                database_tables,
+                fallback_value=None,
+                context="primary_key_detection"
+            )
 
-        # Find primary keys in the tables
-        find_primary_keys(database_tables)
+            # Find foreign keys in the tables
+            safe_execute(
+                find_foreign_keys,
+                database_tables,
+                fallback_value=None,
+                context="foreign_key_detection"
+            )
 
-        # Find foreign keys in the tables
-        find_foreign_keys(database_tables)
+            # Find unique indexes in the tables
+            safe_execute(
+                find_unique_indexes,
+                database_tables,
+                fallback_value=None,
+                context="unique_index_detection"
+            )
 
-        # Find unique indexes in the tables
-        find_unique_indexes(database_tables)
+        # Generate DDL statements
+        try:
+            db.generate_ddl(folder, database_tables)
+        except Exception as e:
+            raise SQLGenerationError(f"Failed to generate DDL statements: {e}") from e
 
-    # Generate DDL statements
-    db.generate_ddl(folder, database_tables)
+        # Generate insert statements
+        try:
+            db.generate_insert_statements(folder, database_tables)
+        except Exception as e:
+            raise SQLGenerationError(f"Failed to generate INSERT statements: {e}") from e
 
-    # Generate insert statements
-    db.generate_insert_statements(folder, database_tables)
+        logging.info("SQL file generation completed successfully.")
+        
+        # Print error summary if there were any errors
+        error_summary = error_handler.get_error_summary()
+        if error_summary["total_errors"] > 0:
+            logging.warning(f"Process completed with {error_summary['total_errors']} errors. Check logs for details.")
 
-    logging.info("SQL file generation completed successfully.")
+    except ValidationError as e:
+        logging.error(f"Input validation failed: {e}")
+        raise
+    except ConfigurationError as e:
+        logging.error(f"Configuration error: {e}")
+        raise
+    except FileProcessingError as e:
+        logging.error(f"File processing error: {e}")
+        raise
+    except CSVProcessingError as e:
+        logging.error(f"CSV processing error: {e}")
+        raise
+    except SQLGenerationError as e:
+        logging.error(f"SQL generation error: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
+        raise FatalError(f"Unexpected error during SQL generation: {e}") from e
 
 
 if __name__ == '__main__':

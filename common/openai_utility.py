@@ -23,165 +23,123 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-import os
-import atexit
 import logging
-import openai
+from typing import List, Optional
 
-from common.library import get_str_from_env, get_int_from_env
-
-
-# Get the OpenAI configuration from environment variables
-openai_api_key = get_str_from_env("OPENAI_API_KEY", "NOT_DEFINED")
-openai_engine = get_str_from_env("OPENAI_ENGINE", "text-davinci-003")
-openai_max_tokens = get_int_from_env("OPENAI_MAX_TOKENS", 1024)
-
-# Set the OpenAI API key
-openai.api_key = openai_api_key
-
-# List to store file IDs for cleanup
-file_ids_to_delete = []
+# Import the new AI provider system
+from common.ai_provider import get_ai_provider, generate_table_names
 
 
-def register_file_for_cleanup(file_id):
+def ask_openai(prompt: str, file_ids: Optional[List[str]] = None, completions: int = 1) -> dict:
     """
-    Register a file ID for cleanup on program exit.
+    Generate a response using the configured AI provider.
+    
+    This function maintains backward compatibility with the old API while using the new AI provider system.
 
     Args:
-        file_id (str): ID of the file to be registered.
-    """
-    file_ids_to_delete.append(file_id)
-
-
-# Register cleanup function to be called on program exit
-atexit.register(lambda: cleanup_files())
-
-
-def cleanup_files():
-    """
-    Cleanup function to delete files registered for cleanup.
-    """
-    if file_ids_to_delete:
-        logging.info("Cleaning up files...")
-        for file_id in file_ids_to_delete:
-            try:
-                openai.File.delete(file_id)
-                logging.info(f"File {file_id} deleted successfully.")
-            except Exception as e:
-                logging.exception(f"Error deleting file {file_id}: {str(e)}")
-
-
-def ask_openai(prompt, file_ids=None, completions=1):
-    """
-    Generate a response from OpenAI based on a given prompt.
-
-    Args:
-        prompt (str): The prompt to send to OpenAI.
-        file_ids (list, optional): List of IDs of files to include with the prompt.
+        prompt (str): The prompt to send to the AI provider.
+        file_ids (list, optional): List of IDs of files to include with the prompt (not supported in new system).
         completions (int, optional): Number of completions to generate.
 
     Returns:
-        dict: The response from OpenAI.
+        dict: The response in the old format for backward compatibility.
     """
-    payload = {
-        "engine": openai_engine,
-        "prompt": prompt,
-        "max_tokens": openai_max_tokens,
-        "temperature": 0,
-        "n": completions,
-        "stop": None,
-        "echo": False
-    }
-
-    if file_ids:
-        payload["files"] = file_ids
-
+    provider = get_ai_provider()
+    
+    if provider is None:
+        logging.warning("No AI provider available. Returning empty response.")
+        return {
+            'choices': [{'text': '', 'finish_reason': 'stop'}]
+        }
+    
     try:
-        response = openai.Completion.create(**payload)
-        return response
-    except openai.error.APIError as e:
-        logging.error(f"OpenAI API Error: {str(e)}")
-        raise
+        response_text = provider.generate_text(prompt)
+        return {
+            'choices': [{'text': response_text, 'finish_reason': 'stop'}]
+        }
+    except Exception as e:
+        logging.error(f"AI provider error: {e}")
+        return {
+            'choices': [{'text': '', 'finish_reason': 'error'}]
+        }
 
 
-def ask_openai_multipart(prompt, file_ids=None, completions=1):
+def ask_openai_multipart(prompt: str, file_ids: Optional[List[str]] = None, completions: int = 1) -> str:
     """
-    Generate a multipart response from OpenAI based on a given prompt.
+    Generate a multipart response using the configured AI provider.
 
     Args:
-        prompt (str): The prompt to send to OpenAI.
-        file_ids (list, optional): List of IDs of files to include with the prompt.
+        prompt (str): The prompt to send to the AI provider.
+        file_ids (list, optional): List of IDs of files to include with the prompt (not supported).
         completions (int, optional): Number of completions to generate.
 
     Returns:
-        str: The concatenated response from OpenAI.
+        str: The concatenated response from the AI provider.
     """
-    response = ask_openai(prompt)
-    results = response['choices'][0]['text']
+    provider = get_ai_provider()
+    
+    if provider is None:
+        logging.warning("No AI provider available. Returning empty response.")
+        return ""
+    
+    try:
+        return provider.generate_text(prompt)
+    except Exception as e:
+        logging.error(f"AI provider error: {e}")
+        return ""
 
-    while response['choices'][0]['finish_reason'] != 'stop':
-        response = ask_openai(results, file_ids, completions)
-        results += response['choices'][0]['text']
 
-    return results
-
-
-def openai_upload_files(jsonl_filenames, remove_files=False):
+def generate_text_with_large_prompt(prompt: str) -> str:
     """
-    Upload a list of files to OpenAI and optionally delete them locally.
+    Generate text using the configured AI provider for large prompts.
 
+    Args:
+        prompt (str): The large prompt to send to the AI provider.
+
+    Returns:
+        str: The generated text from the AI provider.
+    """
+    provider = get_ai_provider()
+    
+    if provider is None:
+        logging.warning("No AI provider available. Returning empty response.")
+        return ""
+    
+    try:
+        return provider.generate_text(prompt)
+    except Exception as e:
+        logging.error(f"AI provider error: {e}")
+        return ""
+
+
+# Legacy functions for backward compatibility
+def openai_upload_files(jsonl_filenames: List[str], remove_files: bool = False) -> List[str]:
+    """
+    Legacy function - file uploads are not supported in the new AI provider system.
+    
     Args:
         jsonl_filenames (list): List of filenames to upload.
         remove_files (bool, optional): Whether to remove the files locally after uploading.
 
     Returns:
-        list: List of IDs of the uploaded files.
+        list: Empty list (file uploads not supported).
     """
-    file_ids = []
-    for filename in jsonl_filenames:
-        with open(filename, "r") as file:
-            try:
-                response = openai.File.create(purpose="fine-tune", file=file)
-                file_ids.append(response.id)
-                register_file_for_cleanup(response.id)
-            except openai.error.APIError as e:
-                logging.error(f"OpenAI API Error while uploading file {filename}: {str(e)}")
-                raise
-
-        if remove_files:
-            try:
-                os.remove(filename)
-            except OSError as e:
-                logging.error(f"Error deleting file {filename}: {str(e)}")
-                raise
-
-    return file_ids
+    logging.warning("File uploads are not supported in the new AI provider system.")
+    return []
 
 
-def generate_text_with_large_prompt(prompt):
+def cleanup_files():
     """
-    Generate text from OpenAI based on a large prompt by splitting it into chunks.
+    Legacy function - no cleanup needed in the new AI provider system.
+    """
+    pass
 
+
+def register_file_for_cleanup(file_id: str):
+    """
+    Legacy function - no cleanup needed in the new AI provider system.
+    
     Args:
-        prompt (str): The large prompt to send to OpenAI.
-
-    Returns:
-        str: The generated text from OpenAI.
+        file_id (str): ID of the file to be registered.
     """
-    # Split the prompt into chunks
-    prompt_chunks = [prompt[i:i + openai_max_tokens] for i in range(0, len(prompt), openai_max_tokens)]
-
-    # Generate text for each prompt chunk
-    response_chunks = []
-    for chunk in prompt_chunks:
-        try:
-            result = ask_openai(chunk)
-            response_chunks.append(str(result))  # Convert dictionary to string
-        except openai.error.APIError as e:
-            logging.error(f"OpenAI API Error while generating text: {str(e)}")
-            raise
-
-    # Concatenate the generated text from all chunks
-    generated_text = ' '.join(response_chunks)
-
-    return generated_text
+    pass
